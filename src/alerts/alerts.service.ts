@@ -1,0 +1,46 @@
+import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { Alert, AlertDocument } from './alert.schema';
+
+@Injectable()
+export class AlertsService {
+  constructor(
+    @InjectModel(Alert.name) private alertModel: Model<AlertDocument>,
+  ) {}
+
+  async create(data: Partial<Alert>) {
+    return this.alertModel.create(data);
+  }
+
+  async findPendingByNavigator(navigatorId: string) {
+    return this.alertModel
+      .find({
+        navigatorId: new Types.ObjectId(navigatorId),
+        status: 'pending',
+      })
+      .populate('patientId')
+      .sort({ severity: 1 });
+  }
+
+  async findLatestByPatient(patientId: string) {
+    return this.alertModel
+      .find({ patientId: new Types.ObjectId(patientId) })
+      .sort({ createdAt: -1 })
+      .limit(10);
+  }
+
+  async findOneLatestByPatient(patientId: string) {
+    return this.alertModel
+      .findOne({ patientId: new Types.ObjectId(patientId) })
+      .sort({ createdAt: -1 });
+  }
+
+  async resolve(alertId: string) {
+    return this.alertModel.findByIdAndUpdate(
+      alertId,
+      { status: 'resolved' },
+      { new: true },
+    );
+  }
+}
