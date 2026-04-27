@@ -5,8 +5,7 @@ import {
   SymptomEntry,
   SymptomEntryDocument,
 } from '../symptom-entry/symptom-entry.schema';
-
-const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+import { addDays, dayNameIST, startOfDayIST } from '../common/ist-date';
 
 @Injectable()
 export class ReportsService {
@@ -20,14 +19,15 @@ export class ReportsService {
       throw new BadRequestException('valid patientId is required');
     }
 
-    // Current calendar week: Sunday 00:00 → next Sunday 00:00 (server local time)
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(now.getDate() - now.getDay());
-    start.setHours(0, 0, 0, 0);
+    // Rolling 7-day window ending today (IST), so column 6 is always today.
+    const todayStart = startOfDayIST(new Date());
+    const start = addDays(todayStart, -6);
+    const end = addDays(todayStart, 1);
 
-    const end = new Date(start);
-    end.setDate(start.getDate() + 7);
+    const weekDays: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      weekDays.push(dayNameIST(addDays(start, i)));
+    }
 
     const entries = await this.entryModel
       .find({
@@ -39,7 +39,12 @@ export class ReportsService {
     const data: Record<string, number[]> = {};
 
     for (const entry of entries) {
-      const dayIdx = new Date(entry.createdAt as Date).getDay();
+      const entryDayStart = startOfDayIST(new Date(entry.createdAt as Date));
+      const dayIdx = Math.round(
+        (entryDayStart.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
+      );
+      if (dayIdx < 0 || dayIdx > 6) continue;
+
       for (const r of entry.responses || []) {
         if (!r?.name) continue;
         if (!data[r.name]) {
@@ -52,6 +57,6 @@ export class ReportsService {
       }
     }
 
-    return { weekDays: WEEK_DAYS, data };
+    return { weekDays, data };
   }
 }

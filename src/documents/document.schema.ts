@@ -28,6 +28,18 @@ export class DocumentMeta {
 
   @Prop({ type: Types.ObjectId, required: true })
   gridfsId: Types.ObjectId;
+
+  @Prop({
+    enum: ['not_applicable', 'pending', 'complete', 'failed'],
+    default: 'not_applicable',
+  })
+  processingStatus: string;
+
+  @Prop()
+  processingError: string;
+
+  @Prop({ default: 0 })
+  draftTaskCount: number;
 }
 
 export const DocumentMetaSchema = SchemaFactory.createForClass(DocumentMeta);

@@ -3,12 +3,18 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { DocumentMeta, DocumentMetaSchema } from './document.schema';
 import { DocumentsService } from './documents.service';
 import { DocumentsController } from './documents.controller';
+import { DocumentProcessingModule } from '../document-processing/document-processing.module';
+import { AlertsModule } from '../alerts/alerts.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: DocumentMeta.name, schema: DocumentMetaSchema },
     ]),
+    DocumentProcessingModule,
+    AlertsModule,
+    UsersModule,
   ],
   controllers: [DocumentsController],
   providers: [DocumentsService],

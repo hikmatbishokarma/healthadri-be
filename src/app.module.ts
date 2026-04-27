@@ -14,6 +14,8 @@ import { PatientsModule } from './patients/patients.module';
 import { TriageModule } from './triage/triage.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { DocumentsModule } from './documents/documents.module';
+import { DocumentProcessingModule } from './document-processing/document-processing.module';
+import { TasksModule } from './tasks/tasks.module';
 import { ReportsModule } from './reports/reports.module';
 
 @Module({
@@ -33,6 +35,8 @@ import { ReportsModule } from './reports/reports.module';
     TriageModule,
     AppointmentsModule,
     DocumentsModule,
+    DocumentProcessingModule,
+    TasksModule,
     ReportsModule,
   ],
 })
