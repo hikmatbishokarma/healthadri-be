@@ -9,6 +9,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as fs from 'fs';
 import * as path from 'path';
+import AdmZip = require('adm-zip');
 import { SarvamAIClient } from 'sarvamai';
 import { AiAuditLog, AiAuditLogDocument } from './schemas/ai-audit-log.schema';
 import { TasksService } from '../tasks/tasks.service';
@@ -62,6 +63,32 @@ export class DocumentProcessingService {
   ) {
     const apiSubscriptionKey = config.get<string>('SARVAM_API_KEY');
     this.client = new SarvamAIClient({ apiSubscriptionKey });
+  }
+
+  async extractTextFromBuffer(
+    buffer: Buffer,
+    originalName: string,
+  ): Promise<string> {
+    if (!buffer || buffer.length === 0) {
+      throw new BadRequestException('file is required');
+    }
+    const tempPath = await this.writeTempFile(buffer, originalName);
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const outputPath = path.join(
+      process.cwd(),
+      'output',
+      `extracted-${unique}.md`,
+    );
+    try {
+      return await this.runOcr(tempPath, outputPath);
+    } finally {
+      fs.promises.unlink(tempPath).catch(() => {
+        /* file may already be gone */
+      });
+      fs.promises.unlink(outputPath).catch(() => {
+        /* file may already be gone */
+      });
+    }
   }
 
   async processDocument(
@@ -160,7 +187,31 @@ export class DocumentProcessingService {
     await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
     await job.downloadOutput(outputPath);
 
-    return fs.promises.readFile(outputPath, 'utf-8');
+    return this.readOcrOutput(outputPath);
+  }
+
+  private async readOcrOutput(outputPath: string): Promise<string> {
+    const buffer = await fs.promises.readFile(outputPath);
+
+    // Sarvam Document Intelligence returns a ZIP archive containing
+    // `document.md` + metadata. Detect via the PK magic header.
+    const isZip =
+      buffer.length >= 2 && buffer[0] === 0x50 && buffer[1] === 0x4b;
+
+    if (!isZip) {
+      return buffer.toString('utf-8');
+    }
+
+    const zip = new AdmZip(buffer);
+    const mdEntry =
+      zip.getEntry('document.md') ||
+      zip.getEntries().find((e) => e.entryName.endsWith('.md'));
+
+    if (!mdEntry) {
+      throw new Error('OCR output archive did not contain a markdown file');
+    }
+
+    return mdEntry.getData().toString('utf-8');
   }
 
   private async extractTasks(extractedText: string): Promise<{
@@ -254,6 +305,7 @@ export class DocumentProcessingService {
     try {
       await this.auditModel.create({
         provider: 'sarvam',
+        feature: 'document-processing',
         patientId: new Types.ObjectId(entry.patientId),
         filePath: entry.filePath,
         extractedText: entry.extractedText,

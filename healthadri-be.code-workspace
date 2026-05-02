@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../healthadri-fe"
+		},
+		{
+			"path": "../healthadri-admin"
 		}
 	],
 	"settings": {}

@@ -9,6 +9,7 @@ import { AlertsModule } from './alerts/alerts.module';
 import { PlaybooksModule } from './playbooks/playbooks.module';
 import { MessagesModule } from './messages/messages.module';
 import { HospitalsModule } from './hospitals/hospitals.module';
+import { DoctorsModule } from './doctors/doctors.module';
 import { NavigatorModule } from './navigator/navigator.module';
 import { PatientsModule } from './patients/patients.module';
 import { TriageModule } from './triage/triage.module';
@@ -17,6 +18,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { DocumentProcessingModule } from './document-processing/document-processing.module';
 import { TasksModule } from './tasks/tasks.module';
 import { ReportsModule } from './reports/reports.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -30,6 +32,7 @@ import { ReportsModule } from './reports/reports.module';
     PlaybooksModule,
     MessagesModule,
     HospitalsModule,
+    DoctorsModule,
     NavigatorModule,
     PatientsModule,
     TriageModule,
@@ -38,6 +41,7 @@ import { ReportsModule } from './reports/reports.module';
     DocumentProcessingModule,
     TasksModule,
     ReportsModule,
+    AiModule,
   ],
 })
 export class AppModule {}

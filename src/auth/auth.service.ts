@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcryptjs';
 import { UsersService } from '../users/users.service';
 
 const STATIC_OTP = '1234';
@@ -27,10 +28,12 @@ export class AuthService {
 
     let user = await this.usersService.findByPhone(phone);
     if (!user) {
+      const navigator = await this.usersService.findFirstNavigator();
       user = await this.usersService.create({
         name: `Patient ${phone.slice(-4)}`,
         phone,
         role: 'patient',
+        assignedNavigatorId: navigator?._id?.toString(),
       });
     }
 
@@ -46,6 +49,34 @@ export class AuthService {
         _id: user._id,
         name: user.name,
         phone: user.phone,
+        role: user.role,
+      },
+    };
+  }
+
+  async adminLogin(email: string, password: string) {
+    const user = await this.usersService.findByEmail(email);
+    if (!user || user.role !== 'super-admin' || !user.passwordHash) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const token = this.jwtService.sign({
+      sub: user._id.toString(),
+      email: user.email,
+      role: user.role,
+    });
+
+    return {
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
         role: user.role,
       },
     };

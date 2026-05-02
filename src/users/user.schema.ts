@@ -8,11 +8,17 @@ export class User {
   @Prop({ required: true })
   name: string;
 
-  @Prop({ required: true })
+  @Prop({ default: '' })
   phone: string;
 
-  @Prop({ required: true, enum: ['patient', 'navigator'] })
+  @Prop({ required: true, enum: ['patient', 'navigator', 'super-admin'] })
   role: string;
+
+  @Prop({ unique: true, sparse: true, lowercase: true, trim: true })
+  email: string;
+
+  @Prop({ default: '' })
+  passwordHash: string;
 
   @Prop({ type: Types.ObjectId, ref: 'User', default: null })
   assignedNavigatorId: Types.ObjectId;

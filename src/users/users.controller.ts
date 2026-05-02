@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   NotFoundException,
@@ -21,6 +22,16 @@ export class UsersController {
     private usersService: UsersService,
     private jwtService: JwtService,
   ) {}
+
+  @Get('navigators')
+  async findNavigators() {
+    return this.usersService.findAllNavigators();
+  }
+
+  @Get('patients')
+  async findPatients() {
+    return this.usersService.findAllPatients();
+  }
 
   @Get('me')
   async me(@Headers('authorization') authHeader?: string) {
@@ -54,6 +65,11 @@ export class UsersController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(id, dto);
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    return this.usersService.remove(id);
   }
 
   private userIdFromHeader(authHeader?: string): string {

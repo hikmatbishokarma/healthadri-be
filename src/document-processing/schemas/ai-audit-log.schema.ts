@@ -26,6 +26,18 @@ export class AiAuditLog {
   @Prop({ type: [Object], default: [] })
   parsedTasks: unknown[];
 
+  @Prop({ default: 'document-processing', index: true })
+  feature: string;
+
+  @Prop()
+  userMessage: string;
+
+  @Prop()
+  classification: string;
+
+  @Prop()
+  responseText: string;
+
   @Prop()
   error: string;
 }

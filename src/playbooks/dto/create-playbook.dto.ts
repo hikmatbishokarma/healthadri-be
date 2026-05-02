@@ -1,4 +1,14 @@
-import { ArrayMinSize, IsArray, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export class CreatePlaybookDto {
   @IsString()
@@ -16,4 +26,9 @@ export class CreatePlaybookDto {
   @ArrayMinSize(1)
   @IsString({ each: true })
   steps: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  autoCompletedCount?: number;
 }

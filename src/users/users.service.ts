@@ -18,6 +18,35 @@ export class UsersService {
     return this.userModel.findOne({ phone });
   }
 
+  async findByEmail(email: string) {
+    return this.userModel.findOne({ email: email.toLowerCase().trim() });
+  }
+
+  async findFirstNavigator() {
+    return this.userModel.findOne({ role: 'navigator' }).sort({ createdAt: 1 });
+  }
+
+  async findAllNavigators() {
+    return this.userModel
+      .find({ role: 'navigator' }, { passwordHash: 0 })
+      .populate('hospitalId')
+      .sort({ name: 1 });
+  }
+
+  async findAllPatients() {
+    return this.userModel
+      .find({ role: 'patient' }, { passwordHash: 0 })
+      .populate('assignedNavigatorId', 'name phone')
+      .populate('hospitalId', 'name')
+      .sort({ name: 1 });
+  }
+
+  async remove(id: string) {
+    const deleted = await this.userModel.findByIdAndDelete(id);
+    if (!deleted) throw new NotFoundException(`User ${id} not found`);
+    return { deleted: true };
+  }
+
   async findPatientsByNavigator(navigatorId: string) {
     return this.userModel.find({
       role: 'patient',

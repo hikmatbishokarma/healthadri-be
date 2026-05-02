@@ -13,6 +13,9 @@ export class Playbook {
 
   @Prop({ type: [String], default: [] })
   steps: string[];
+
+  @Prop({ default: 0 })
+  autoCompletedCount: number;
 }
 
 export const PlaybookSchema = SchemaFactory.createForClass(Playbook);

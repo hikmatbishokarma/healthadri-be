@@ -9,4 +9,9 @@ export class NavigatorController {
   async getDashboard(@Param('navigatorId') navigatorId: string) {
     return this.navigatorService.getDashboard(navigatorId);
   }
+
+  @Get('playbook-run/:patientId')
+  async getPlaybookRun(@Param('patientId') patientId: string) {
+    return this.navigatorService.getPlaybookRun(patientId);
+  }
 }
