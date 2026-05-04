@@ -12,6 +12,11 @@ export class HospitalsController {
     return this.hospitalsService.findAll();
   }
 
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.hospitalsService.findOne(id);
+  }
+
   @Post()
   async create(@Body() dto: CreateHospitalDto) {
     return this.hospitalsService.create(dto);

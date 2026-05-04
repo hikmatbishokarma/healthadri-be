@@ -23,24 +23,35 @@ export class DoctorsService {
   }
 
   async create(dto: CreateDoctorDto) {
-    const { hospitalId, ...rest } = dto;
+    const { hospitalId, affiliations, ...rest } = dto;
     return this.doctorModel.create({
       ...rest,
       hospitalId: hospitalId ? new Types.ObjectId(hospitalId) : null,
+      affiliations: this.mapAffiliations(affiliations),
     });
   }
 
   async update(id: string, dto: UpdateDoctorDto) {
-    const { hospitalId, ...rest } = dto;
+    const { hospitalId, affiliations, ...rest } = dto;
     const patch: Record<string, unknown> = { ...rest };
     if (hospitalId !== undefined) {
       patch.hospitalId = hospitalId ? new Types.ObjectId(hospitalId) : null;
+    }
+    if (affiliations !== undefined) {
+      patch.affiliations = this.mapAffiliations(affiliations);
     }
     const updated = await this.doctorModel
       .findByIdAndUpdate(id, patch, { new: true })
       .populate('hospitalId');
     if (!updated) throw new NotFoundException(`Doctor ${id} not found`);
     return updated;
+  }
+
+  private mapAffiliations(affiliations?: Array<{ hospitalId?: string; consultationDays?: string[]; consultationHoursStart?: string; consultationHoursEnd?: string; appointmentNumber?: string }>) {
+    return (affiliations ?? []).map(({ hospitalId, ...rest }) => ({
+      ...rest,
+      hospitalId: hospitalId ? new Types.ObjectId(hospitalId) : null,
+    }));
   }
 
   async remove(id: string) {

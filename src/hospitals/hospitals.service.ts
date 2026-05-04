@@ -16,6 +16,12 @@ export class HospitalsService {
     return this.hospitalModel.find();
   }
 
+  async findOne(id: string) {
+    const hospital = await this.hospitalModel.findById(id);
+    if (!hospital) throw new NotFoundException(`Hospital ${id} not found`);
+    return hospital;
+  }
+
   async create(dto: CreateHospitalDto) {
     return this.hospitalModel.create(dto);
   }
