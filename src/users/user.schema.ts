@@ -11,7 +11,7 @@ export class User {
   @Prop({ default: '' })
   phone: string;
 
-  @Prop({ required: true, enum: ['patient', 'navigator', 'super-admin'] })
+  @Prop({ required: true, enum: ['patient', 'navigator', 'super-admin', 'caregiver'] })
   role: string;
 
   @Prop({ unique: true, sparse: true, lowercase: true, trim: true })
@@ -61,6 +61,33 @@ export class User {
 
   @Prop({ default: 0 })
   acuityScore: number;
+
+  // caregiver accounts only
+  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  linkedPatientId: Types.ObjectId;
+
+  // patient profile fields
+  @Prop({ default: '' })
+  primarySite: string;
+
+  @Prop({
+    default: '',
+    enum: ['', 'newly-diagnosed', 'awaiting-surgery', 'chemo-radiation', 'post-treatment'],
+  })
+  treatmentStatus: string;
+
+  @Prop({ default: null })
+  dateOfDiagnosis: Date;
+
+  @Prop({ default: '' })
+  alternatePhone: string;
+
+  // caregiver info captured during patient onboarding (before caregiver registers)
+  @Prop({ default: '' })
+  caregiverPhone: string;
+
+  @Prop({ default: '' })
+  caregiverRelationship: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

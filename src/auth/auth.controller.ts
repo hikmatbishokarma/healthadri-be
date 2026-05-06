@@ -15,7 +15,7 @@ export class AuthController {
 
   @Post('verify-otp')
   async verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyOtp(dto.phone, dto.otp);
+    return this.authService.verifyOtp(dto.phone, dto.otp, dto.role, dto.inviteCode);
   }
 
   @Post('admin/login')

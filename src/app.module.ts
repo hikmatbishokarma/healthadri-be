@@ -19,6 +19,8 @@ import { DocumentProcessingModule } from './document-processing/document-process
 import { TasksModule } from './tasks/tasks.module';
 import { ReportsModule } from './reports/reports.module';
 import { AiModule } from './ai/ai.module';
+import { InviteCodeModule } from './invite-code/invite-code.module';
+import { CaregiverModule } from './caregiver/caregiver.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { AiModule } from './ai/ai.module';
     TasksModule,
     ReportsModule,
     AiModule,
+    InviteCodeModule,
+    CaregiverModule,
   ],
 })
 export class AppModule {}

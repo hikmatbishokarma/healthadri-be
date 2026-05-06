@@ -1,9 +1,12 @@
 import {
   IsArray,
+  IsDateString,
+  IsIn,
   IsInt,
   IsMongoId,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -51,4 +54,32 @@ export class UpdateProfileDto {
   @IsArray()
   @IsString({ each: true })
   languages?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  primarySite?: string;
+
+  @IsOptional()
+  @IsIn(['newly-diagnosed', 'awaiting-surgery', 'chemo-radiation', 'post-treatment'])
+  treatmentStatus?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateOfDiagnosis?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+?[0-9]{7,15}$/, { message: 'alternatePhone must be a valid phone number' })
+  alternatePhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+?[0-9]{7,15}$/, { message: 'caregiverPhone must be a valid phone number' })
+  caregiverPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  caregiverRelationship?: string;
 }

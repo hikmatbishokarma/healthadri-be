@@ -55,11 +55,12 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto) {
-    const { assignedNavigatorId, hospitalId, ...rest } = dto;
+    const { assignedNavigatorId, hospitalId, linkedPatientId, ...rest } = dto;
     const payload: Record<string, unknown> = {
       ...rest,
       assignedNavigatorId: assignedNavigatorId ? new Types.ObjectId(assignedNavigatorId) : null,
       hospitalId: hospitalId ? new Types.ObjectId(hospitalId) : null,
+      linkedPatientId: linkedPatientId ? new Types.ObjectId(linkedPatientId) : null,
     };
     if (dto.role === 'patient') {
       payload.patientCode = await this.generatePatientCode();
@@ -68,10 +69,13 @@ export class UsersService {
   }
 
   async updateProfile(id: string, dto: UpdateProfileDto) {
-    const { hospitalId, ...rest } = dto;
+    const { hospitalId, dateOfDiagnosis, ...rest } = dto;
     const patch: Record<string, unknown> = { ...rest, profileCompleted: true };
     if (hospitalId !== undefined) {
       patch.hospitalId = hospitalId ? new Types.ObjectId(hospitalId) : null;
+    }
+    if (dateOfDiagnosis !== undefined) {
+      patch.dateOfDiagnosis = dateOfDiagnosis ? new Date(dateOfDiagnosis) : null;
     }
     const updated = await this.userModel.findByIdAndUpdate(id, patch, { new: true })
       .populate('hospitalId');
