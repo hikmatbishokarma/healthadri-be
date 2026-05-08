@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AlertsService } from '../alerts/alerts.service';
+import { AppointmentsService } from '../appointments/appointments.service';
 import { SymptomEntryService } from '../symptom-entry/symptom-entry.service';
 import { UsersService } from '../users/users.service';
 
@@ -9,6 +10,7 @@ export class CaregiverService {
     private usersService: UsersService,
     private symptomEntryService: SymptomEntryService,
     private alertsService: AlertsService,
+    private appointmentsService: AppointmentsService,
   ) {}
 
   async getPatientStatus(caregiverId: string) {
@@ -19,10 +21,11 @@ export class CaregiverService {
 
     const patientId = caregiver.linkedPatientId.toString();
 
-    const [patient, latestEntry, pendingAlerts] = await Promise.all([
+    const [patient, latestEntry, pendingAlerts, allAppointments] = await Promise.all([
       this.usersService.findById(patientId),
       this.symptomEntryService.findLatestByPatient(patientId),
       this.alertsService.findLatestByPatient(patientId),
+      this.appointmentsService.findByPatient(patientId),
     ]);
 
     if (!patient) throw new NotFoundException('Linked patient not found');
@@ -31,6 +34,11 @@ export class CaregiverService {
     if (patient.assignedNavigatorId) {
       navigator = await this.usersService.findById(patient.assignedNavigatorId.toString());
     }
+
+    const now = new Date();
+    const upcomingAppointments = allAppointments
+      .filter((a) => new Date(a.scheduledAt) > now)
+      .slice(0, 5);
 
     return {
       patient: {
@@ -46,6 +54,7 @@ export class CaregiverService {
         : null,
       latestEntry,
       recentAlerts: pendingAlerts.filter((a) => a.status === 'pending').slice(0, 5),
+      upcomingAppointments,
     };
   }
 }

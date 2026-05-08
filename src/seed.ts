@@ -162,6 +162,32 @@ async function seed() {
   }
   console.log('Patients created.');
 
+  // 4b. Caregiver — Lakshmi Kumar (wife of Ravi Kumar)
+  await db.collection('users').insertOne({
+    name: 'Lakshmi Kumar',
+    phone: '6666666666',
+    role: 'caregiver',
+    linkedPatientId: patientIds['Ravi Kumar'],
+    assignedNavigatorId: null,
+    cancerType: '',
+    cancerStage: '',
+    avatar: '',
+    profileCompleted: false,
+    age: 42,
+    gender: 'female',
+    hospitalName: '',
+    hospitalId: null,
+    patientCode: null,
+    languages: ['Telugu', 'English'],
+    chemoSessionsCompleted: 0,
+    chemoSessionsTotal: 0,
+    acuityScore: 0,
+    caregiverRelationship: 'Spouse',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  console.log('Caregiver created: Lakshmi Kumar (linked to Ravi Kumar)');
+
   // 5. Symptom entries + Alerts (so navigator dashboard renders mockup state)
   const now = new Date();
   const at = (h: number, m = 0) => {
@@ -397,7 +423,7 @@ async function seed() {
   console.log('\n--- Seed Complete ---');
   console.log(`Navigator ID (Priya Sharma): ${navigatorId}`);
   Object.entries(patientIds).forEach(([n, id]) => console.log(`  ${n}: ${id}`));
-  console.log(`\nLogin: phone 1111111111 (navigator) / 2222222222 (Ravi) — OTP 1234`);
+  console.log(`\nLogin: phone 1111111111 (navigator) / 2222222222 (Ravi) / 6666666666 (Lakshmi - caregiver) — OTP 1234`);
   console.log(`Admin login: ${SUPER_ADMIN_EMAIL} / ${SUPER_ADMIN_PASSWORD}`);
 
   await mongoose.disconnect();
