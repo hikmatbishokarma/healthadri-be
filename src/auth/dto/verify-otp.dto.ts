@@ -10,10 +10,6 @@ export class VerifyOtpDto {
   otp: string;
 
   @IsOptional()
-  @IsIn(['patient', 'caregiver'])
-  role?: 'patient' | 'caregiver';
-
-  @IsOptional()
-  @IsString()
-  inviteCode?: string;
+  @IsIn(['patient', 'caregiver', 'navigator'])
+  role?: 'patient' | 'caregiver' | 'navigator';
 }

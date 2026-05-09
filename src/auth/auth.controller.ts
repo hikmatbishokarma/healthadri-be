@@ -1,8 +1,9 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { AdminLoginDto } from './dto/admin-login.dto';
+import { CaregiverLinkDto } from './dto/caregiver-link.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
-import { AdminLoginDto } from './dto/admin-login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -15,7 +16,12 @@ export class AuthController {
 
   @Post('verify-otp')
   async verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyOtp(dto.phone, dto.otp, dto.role, dto.inviteCode);
+    return this.authService.verifyOtp(dto.phone, dto.otp, dto.role);
+  }
+
+  @Post('caregiver/link')
+  async caregiverLink(@Body() dto: CaregiverLinkDto) {
+    return this.authService.caregiverLink(dto.tempToken, dto.inviteCode);
   }
 
   @Post('admin/login')

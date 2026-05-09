@@ -84,7 +84,7 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserDto) {
-    const { assignedNavigatorId, hospitalId, ...rest } = dto;
+    const { assignedNavigatorId, hospitalId, linkedPatientId, ...rest } = dto;
     const patch: Record<string, unknown> = { ...rest };
     if (assignedNavigatorId !== undefined) {
       patch.assignedNavigatorId = assignedNavigatorId
@@ -93,6 +93,9 @@ export class UsersService {
     }
     if (hospitalId !== undefined) {
       patch.hospitalId = hospitalId ? new Types.ObjectId(hospitalId) : null;
+    }
+    if (linkedPatientId !== undefined) {
+      patch.linkedPatientId = linkedPatientId ? new Types.ObjectId(linkedPatientId) : null;
     }
     const updated = await this.userModel.findByIdAndUpdate(id, patch, { new: true })
       .populate('hospitalId');

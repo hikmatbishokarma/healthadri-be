@@ -36,6 +36,31 @@ export class AlertsService {
       .sort({ createdAt: -1 });
   }
 
+  async countByNavigatorSince(
+    navigatorId: string,
+    since: Date,
+    before?: Date,
+    severity?: string,
+  ) {
+    const query: Record<string, unknown> = {
+      navigatorId: new Types.ObjectId(navigatorId),
+      createdAt: before
+        ? { $gte: since, $lt: before }
+        : { $gte: since },
+    };
+    if (severity) query.severity = severity;
+    return this.alertModel.countDocuments(query);
+  }
+
+  async findPendingByPatients(patientIds: string[]) {
+    return this.alertModel
+      .find({
+        patientId: { $in: patientIds.map((id) => new Types.ObjectId(id)) },
+        status: 'pending',
+      })
+      .sort({ severity: 1, createdAt: -1 });
+  }
+
   async resolve(alertId: string) {
     return this.alertModel.findByIdAndUpdate(
       alertId,

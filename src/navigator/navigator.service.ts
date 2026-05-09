@@ -7,6 +7,12 @@ const SEVERITY_ORDER = { HIGH: 0, MED: 1, LOW: 2 };
 
 type SeverityKey = keyof typeof SEVERITY_ORDER;
 
+function startOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 @Injectable()
 export class NavigatorService {
   constructor(
@@ -16,7 +22,18 @@ export class NavigatorService {
   ) {}
 
   async getDashboard(navigatorId: string) {
-    const alerts = await this.alertsService.findPendingByNavigator(navigatorId);
+    const today = startOfDay(new Date());
+    const yesterday = startOfDay(new Date(Date.now() - 86_400_000));
+
+    const [alerts, allPatients, todayHigh, yesterdayHigh, todayAlerts, yesterdayAlerts] =
+      await Promise.all([
+        this.alertsService.findPendingByNavigator(navigatorId),
+        this.usersService.findPatientsByNavigator(navigatorId),
+        this.alertsService.countByNavigatorSince(navigatorId, today, undefined, 'HIGH'),
+        this.alertsService.countByNavigatorSince(navigatorId, yesterday, today, 'HIGH'),
+        this.alertsService.countByNavigatorSince(navigatorId, today),
+        this.alertsService.countByNavigatorSince(navigatorId, yesterday, today),
+      ]);
 
     const patientMap = new Map<string, any>();
     for (const alert of alerts) {
@@ -47,19 +64,64 @@ export class NavigatorService {
         SEVERITY_ORDER[b.severity as SeverityKey],
     );
 
-    const highPriorityToday = alerts.filter((a) => a.severity === 'HIGH').length;
-
     const priorityQueueText = this.buildPriorityQueueText(patients);
 
     return {
       summary: {
-        activePatients: patientMap.size,
-        highPriorityToday,
-        actionsPending: alerts.length,
+        totalPatients: allPatients.length,
+        highPriority: alerts.filter((a) => a.severity === 'HIGH').length,
+        highPriorityChange: todayHigh - yesterdayHigh,
+        alerts: alerts.length,
+        alertsChange: todayAlerts - yesterdayAlerts,
+        followupsDue: 0,          // populated by appointments module when ready
+        followupsDueChange: 0,
       },
       priorityQueueText,
+      highPriorityPatients: patients.filter((p) => p.severity === 'HIGH').slice(0, 5),
       patients,
     };
+  }
+
+  async getPatientsList(navigatorId: string) {
+    const allPatients = await this.usersService.findPatientsByNavigator(navigatorId);
+    if (allPatients.length === 0) return [];
+
+    const patientIds = allPatients.map((p) => (p as any)._id.toString());
+    const pendingAlerts = await this.alertsService.findPendingByPatients(patientIds);
+
+    // Build a map: patientId → highest-severity pending alert
+    const alertMap = new Map<string, any>();
+    for (const alert of pendingAlerts) {
+      const pid = (alert.patientId as any).toString();
+      const current = alertMap.get(pid);
+      if (
+        !current ||
+        SEVERITY_ORDER[alert.severity as SeverityKey] <
+          SEVERITY_ORDER[current.severity as SeverityKey]
+      ) {
+        alertMap.set(pid, alert);
+      }
+    }
+
+    return allPatients.map((patient: any) => {
+      const pid = patient._id.toString();
+      const alert = alertMap.get(pid);
+      return {
+        _id: pid,
+        name: patient.name,
+        cancerType: patient.cancerType || '',
+        stage: patient.cancerStage || '',
+        priority: (alert?.severity ?? 'LOW') as 'HIGH' | 'MED' | 'LOW',
+        topSymptom: alert?.reason ?? null,
+        alertType: alert?.type ?? null,
+        lastUpdatedAt: alert?.updatedAt ?? patient.updatedAt ?? null,
+        acuityScore: patient.acuityScore ?? 0,
+      };
+    }).sort(
+      (a, b) =>
+        SEVERITY_ORDER[a.priority as SeverityKey] -
+        SEVERITY_ORDER[b.priority as SeverityKey],
+    );
   }
 
   async getPlaybookRun(patientId: string) {

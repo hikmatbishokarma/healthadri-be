@@ -1,21 +1,37 @@
-import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { MessagesService } from './messages.service';
-import { SendMessageDto } from './dto/send-message.dto';
+import { HeartbeatDto, SendMessageDto } from './dto/send-message.dto';
 
 @Controller('messages')
 export class MessagesController {
   constructor(private messagesService: MessagesService) {}
 
-  @Get(':userId')
-  async getConversation(
-    @Param('userId') userId: string,
-    @Query('with') withUserId: string,
+  @Get('thread/:patientId')
+  async getThread(
+    @Param('patientId') patientId: string,
+    @Query('since') since?: string,
+    @Query('callerRole') callerRole?: string,
   ) {
-    return this.messagesService.getConversation(userId, withUserId);
+    return this.messagesService.getThread(patientId, since, callerRole ?? 'patient');
   }
 
-  @Post()
+  @Post('send')
   async send(@Body() dto: SendMessageDto) {
-    return this.messagesService.send(dto.senderId, dto.receiverId, dto.text);
+    return this.messagesService.send(dto);
+  }
+
+  @Get('inbox/:navigatorId')
+  async getInbox(@Param('navigatorId') navigatorId: string) {
+    return this.messagesService.getInbox(navigatorId);
+  }
+
+  @Post('read/:conversationId')
+  async markRead(@Param('conversationId') conversationId: string) {
+    return this.messagesService.markRead(conversationId);
+  }
+
+  @Post('heartbeat')
+  async heartbeat(@Body() dto: HeartbeatDto) {
+    return this.messagesService.heartbeat(dto.navigatorId);
   }
 }

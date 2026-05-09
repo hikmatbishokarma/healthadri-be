@@ -88,6 +88,9 @@ export class User {
 
   @Prop({ default: '' })
   caregiverRelationship: string;
+
+  @Prop({ default: null })
+  lastActiveAt: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
