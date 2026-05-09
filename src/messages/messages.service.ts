@@ -72,7 +72,10 @@ export class MessagesService {
     const query: any = { conversationId: conv._id };
     if (since) query.createdAt = { $gt: new Date(since) };
 
-    const allMessages = await this.messageModel.find(query).sort({ createdAt: 1 });
+    const allMessages = await this.messageModel
+      .find(query)
+      .populate('senderId', 'name')   // resolves senderId → { _id, name }
+      .sort({ createdAt: 1 });
 
     // Navigators see everything; patients/caregivers see only their visibleTo slice
     // Hidden messages become blocker placeholders so the timeline is never silently gapped
@@ -113,7 +116,17 @@ export class MessagesService {
 
     const patient = await this.userModel
       .findById(conv.patientId)
-      .select('name cancerType cancerStage hospitalName chemoSessionsCompleted chemoSessionsTotal patientCode caregiverRelationship');
+      .select('name cancerType cancerStage hospitalName chemoSessionsCompleted chemoSessionsTotal patientCode caregiverRelationship')
+      .lean();
+
+    // Attach caregiver name so the navigator context card shows "Priya Sharma · wife"
+    if (patient) {
+      const caregiver = await this.userModel
+        .findOne({ linkedPatientId: conv.patientId, role: 'caregiver' })
+        .select('name')
+        .lean();
+      (patient as any).caregiverName = caregiver?.name ?? null;
+    }
 
     return { conversation: conv, messages, navigatorOnline, patient };
   }

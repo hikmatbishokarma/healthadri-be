@@ -76,6 +76,7 @@ export class AuthService {
             name: existingCaregiver.name,
             phone: existingCaregiver.phone,
             role: existingCaregiver.role,
+            linkedPatientId: existingCaregiver.linkedPatientId,
           },
         };
       }
@@ -174,6 +175,7 @@ export class AuthService {
         name: user.name,
         phone: user.phone,
         role: user.role,
+        linkedPatientId: user.linkedPatientId ?? null,
       },
     };
   }
