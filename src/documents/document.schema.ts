@@ -40,6 +40,9 @@ export class DocumentMeta {
 
   @Prop({ default: 0 })
   draftTaskCount: number;
+
+  @Prop({ type: Types.ObjectId, ref: 'ReviewBatch', default: null })
+  reviewBatchId: Types.ObjectId | null;
 }
 
 export const DocumentMetaSchema = SchemaFactory.createForClass(DocumentMeta);

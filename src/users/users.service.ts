@@ -1,6 +1,7 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import * as bcrypt from 'bcryptjs';
 import { User, UserDocument } from './user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -55,13 +56,16 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto) {
-    const { assignedNavigatorId, hospitalId, linkedPatientId, ...rest } = dto;
+    const { assignedNavigatorId, hospitalId, linkedPatientId, password, ...rest } = dto;
     const payload: Record<string, unknown> = {
       ...rest,
       assignedNavigatorId: assignedNavigatorId ? new Types.ObjectId(assignedNavigatorId) : null,
       hospitalId: hospitalId ? new Types.ObjectId(hospitalId) : null,
       linkedPatientId: linkedPatientId ? new Types.ObjectId(linkedPatientId) : null,
     };
+    if (password) {
+      payload.passwordHash = await bcrypt.hash(password, 10);
+    }
     if (dto.role === 'patient') {
       payload.patientCode = await this.generatePatientCode();
     }
@@ -69,10 +73,13 @@ export class UsersService {
   }
 
   async updateProfile(id: string, dto: UpdateProfileDto) {
-    const { hospitalId, dateOfDiagnosis, ...rest } = dto;
+    const { hospitalId, doctorId, dateOfDiagnosis, ...rest } = dto;
     const patch: Record<string, unknown> = { ...rest, profileCompleted: true };
     if (hospitalId !== undefined) {
       patch.hospitalId = hospitalId ? new Types.ObjectId(hospitalId) : null;
+    }
+    if (doctorId !== undefined) {
+      patch.doctorId = doctorId ? new Types.ObjectId(doctorId) : null;
     }
     if (dateOfDiagnosis !== undefined) {
       patch.dateOfDiagnosis = dateOfDiagnosis ? new Date(dateOfDiagnosis) : null;
@@ -84,8 +91,11 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserDto) {
-    const { assignedNavigatorId, hospitalId, linkedPatientId, ...rest } = dto;
+    const { assignedNavigatorId, hospitalId, linkedPatientId, password, ...rest } = dto;
     const patch: Record<string, unknown> = { ...rest };
+    if (password) {
+      patch.passwordHash = await bcrypt.hash(password, 10);
+    }
     if (assignedNavigatorId !== undefined) {
       patch.assignedNavigatorId = assignedNavigatorId
         ? new Types.ObjectId(assignedNavigatorId)
@@ -101,6 +111,31 @@ export class UsersService {
       .populate('hospitalId');
     if (!updated) throw new NotFoundException(`User ${id} not found`);
     return updated;
+  }
+
+  async findCaregiverForPatient(patientId: string) {
+    return this.userModel.findOne({
+      role: 'caregiver',
+      linkedPatientId: new Types.ObjectId(patientId),
+    });
+  }
+
+  async setActiveCarePlan(patientId: string, versionId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(patientId, {
+      activeCarePlanVersionId: new Types.ObjectId(versionId),
+    });
+  }
+
+  async addDeviceToken(userId: string, token: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      $addToSet: { pushTokens: token },
+    });
+  }
+
+  async removeDeviceToken(userId: string, token: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      $pull: { pushTokens: token },
+    });
   }
 
   private async generatePatientCode(): Promise<string> {

@@ -5,6 +5,7 @@ import { Conversation, ConversationDocument } from './conversation.schema';
 import { Message, MessageDocument } from './message.schema';
 import { SendMessageDto } from './dto/send-message.dto';
 import { User, UserDocument } from '../users/user.schema';
+import { EventsGateway } from '../events/events.gateway';
 
 const ESCALATION_KEYWORDS = [
   'pain', 'emergency', 'hospital', 'bleeding', 'breathing',
@@ -43,6 +44,7 @@ export class MessagesService {
     @InjectModel(Conversation.name) private convModel: Model<ConversationDocument>,
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private eventsGateway: EventsGateway,
   ) {}
 
   private async getOrCreateConversation(patientId: string): Promise<ConversationDocument> {
@@ -186,6 +188,16 @@ export class MessagesService {
       $set: { lastMessageAt: new Date(), status: newStatus },
       $inc: { unreadCount: unreadIncrement },
     });
+
+    if (dto.senderType !== 'navigator' && conv.navigatorId) {
+      this.eventsGateway.emitNewMessage(conv.navigatorId.toString(), {
+        conversationId: conv._id,
+        patientId: dto.patientId,
+        senderType: dto.senderType,
+        body: dto.body,
+        status: newStatus,
+      });
+    }
 
     return { message: msg, botMessage: botMsg, scopeMessage: scopeMsg };
   }

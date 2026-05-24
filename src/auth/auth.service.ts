@@ -207,4 +207,33 @@ export class AuthService {
       },
     };
   }
+
+  async webLogin(email: string, password: string) {
+    const user = await this.usersService.findByEmail(email);
+    if (!user || !['super-admin', 'navigator'].includes(user.role) || !user.passwordHash) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const token = this.jwtService.sign({
+      sub: user._id.toString(),
+      email: user.email,
+      role: user.role,
+    });
+
+    return {
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
+    };
+  }
 }

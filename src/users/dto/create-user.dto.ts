@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsEmail,
   IsEnum,
   IsInt,
   IsMongoId,
@@ -17,9 +18,19 @@ export class CreateUserDto {
   @MaxLength(80)
   name: string;
 
+  @IsOptional()
   @IsString()
   @Matches(/^\+?[0-9]{7,15}$/, { message: 'phone must be a valid phone number' })
-  phone: string;
+  phone?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  password?: string;
 
   @IsEnum(['patient', 'navigator', 'caregiver'])
   role: 'patient' | 'navigator' | 'caregiver';
@@ -70,4 +81,65 @@ export class CreateUserDto {
   @IsInt()
   @Min(0)
   acuityScore?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  caregiverName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  abhaNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+?[0-9]{7,15}$/, { message: 'emergencyContactPhone must be a valid phone number' })
+  emergencyContactPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  primarySite?: string;
+
+  @IsOptional()
+  @IsString()
+  treatmentStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  dateOfDiagnosis?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  caregiverPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  caregiverRelationship?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  gender?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  age?: number;
+
+  @IsOptional()
+  @IsString()
+  hospitalName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  doctorName?: string;
+
+  @IsOptional()
+  @IsMongoId()
+  doctorId?: string;
 }

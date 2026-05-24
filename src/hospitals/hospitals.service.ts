@@ -12,8 +12,9 @@ export class HospitalsService {
     private hospitalModel: Model<HospitalDocument>,
   ) {}
 
-  async findAll() {
-    return this.hospitalModel.find();
+  async findAll(search?: string) {
+    const filter = search ? { name: { $regex: search, $options: 'i' } } : {};
+    return this.hospitalModel.find(filter).limit(20);
   }
 
   async findOne(id: string) {

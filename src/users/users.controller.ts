@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -65,6 +66,26 @@ export class UsersController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(id, dto);
+  }
+
+  @Post(':id/device-token')
+  async addDeviceToken(
+    @Param('id') id: string,
+    @Body() body: { token: string },
+  ) {
+    if (!body?.token) throw new BadRequestException('token is required');
+    await this.usersService.addDeviceToken(id, body.token);
+    return { ok: true };
+  }
+
+  @Delete(':id/device-token')
+  async removeDeviceToken(
+    @Param('id') id: string,
+    @Body() body: { token: string },
+  ) {
+    if (!body?.token) throw new BadRequestException('token is required');
+    await this.usersService.removeDeviceToken(id, body.token);
+    return { ok: true };
   }
 
   @Delete(':id')

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { HospitalsService } from './hospitals.service';
 import { CreateHospitalDto } from './dto/create-hospital.dto';
 import { UpdateHospitalDto } from './dto/update-hospital.dto';
@@ -8,8 +8,8 @@ export class HospitalsController {
   constructor(private hospitalsService: HospitalsService) {}
 
   @Get()
-  async findAll() {
-    return this.hospitalsService.findAll();
+  async findAll(@Query('search') search?: string) {
+    return this.hospitalsService.findAll(search);
   }
 
   @Get(':id')

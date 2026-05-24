@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { DoctorsService } from './doctors.service';
 import { CreateDoctorDto } from './dto/create-doctor.dto';
@@ -16,8 +17,8 @@ export class DoctorsController {
   constructor(private doctorsService: DoctorsService) {}
 
   @Get()
-  async findAll() {
-    return this.doctorsService.findAll();
+  async findAll(@Query('search') search?: string) {
+    return this.doctorsService.findAll(search);
   }
 
   @Get(':id')

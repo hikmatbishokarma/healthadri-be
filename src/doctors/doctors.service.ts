@@ -12,8 +12,9 @@ export class DoctorsService {
     private doctorModel: Model<DoctorDocument>,
   ) {}
 
-  async findAll() {
-    return this.doctorModel.find().populate('hospitalId').sort({ name: 1 });
+  async findAll(search?: string) {
+    const filter = search ? { name: { $regex: search, $options: 'i' } } : {};
+    return this.doctorModel.find(filter).populate('hospitalId').sort({ name: 1 }).limit(20);
   }
 
   async findById(id: string) {

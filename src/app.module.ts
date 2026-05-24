@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { SymptomsModule } from './symptoms/symptoms.module';
@@ -21,11 +23,21 @@ import { ReportsModule } from './reports/reports.module';
 import { AiModule } from './ai/ai.module';
 import { InviteCodeModule } from './invite-code/invite-code.module';
 import { CaregiverModule } from './caregiver/caregiver.module';
+import { EventsModule } from './events/events.module';
+import { VisitsModule } from './visits/visits.module';
+import { TimelineModule } from './timeline/timeline.module';
+import { ReviewQueueModule } from './review-queue/review-queue.module';
+import { CarePlanModule } from './care-plan/care-plan.module';
+import { ReminderEngineModule } from './reminder-engine/reminder-engine.module';
+import { EscalationModule } from './escalation/escalation.module';
+import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/healthadri'),
+    EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
     SymptomsModule,
@@ -46,6 +58,14 @@ import { CaregiverModule } from './caregiver/caregiver.module';
     AiModule,
     InviteCodeModule,
     CaregiverModule,
+    EventsModule,
+    VisitsModule,
+    TimelineModule,
+    ReviewQueueModule,
+    CarePlanModule,
+    ReminderEngineModule,
+    EscalationModule,
+    PushNotificationsModule,
   ],
 })
 export class AppModule {}

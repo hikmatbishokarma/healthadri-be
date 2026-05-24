@@ -82,4 +82,28 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(40)
   caregiverRelationship?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  caregiverName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  abhaNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+?[0-9]{7,15}$/, { message: 'emergencyContactPhone must be a valid phone number' })
+  emergencyContactPhone?: string;
+
+  @IsOptional()
+  @IsMongoId()
+  doctorId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  doctorName?: string;
 }

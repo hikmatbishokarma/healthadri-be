@@ -6,6 +6,8 @@ import { DocumentsController } from './documents.controller';
 import { DocumentProcessingModule } from '../document-processing/document-processing.module';
 import { AlertsModule } from '../alerts/alerts.module';
 import { UsersModule } from '../users/users.module';
+import { ReviewQueueModule } from '../review-queue/review-queue.module';
+import { EventsModule } from '../events/events.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { UsersModule } from '../users/users.module';
     DocumentProcessingModule,
     AlertsModule,
     UsersModule,
+    ReviewQueueModule,
+    EventsModule,
   ],
   controllers: [DocumentsController],
   providers: [DocumentsService],

@@ -12,6 +12,8 @@ import { DocumentMeta, DocumentMetaDocument } from './document.schema';
 import { DocumentProcessingService } from '../document-processing/document.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { UsersService } from '../users/users.service';
+import { ReviewQueueService } from '../review-queue/review-queue.service';
+import { EventsGateway } from '../events/events.gateway';
 
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
@@ -34,6 +36,8 @@ export class DocumentsService {
     private processingService: DocumentProcessingService,
     private alertsService: AlertsService,
     private usersService: UsersService,
+    private reviewQueueService: ReviewQueueService,
+    private eventsGateway: EventsGateway,
   ) {}
 
   private getBucket(): GridFSBucket {
@@ -110,20 +114,40 @@ export class DocumentsService {
     this.processingService
       .processDocument(patientId, fileBuffer, originalName, metaId)
       .then(async (result) => {
-        const taskCount = result.tasks?.length ?? 0;
+        const richTasks = result.richTasks ?? [];
+
+        let reviewBatchId: string | null = null;
+        if (richTasks.length > 0) {
+          const batch = await this.reviewQueueService.createBatch(patientId, metaId, richTasks);
+          if (batch) {
+            reviewBatchId = (batch as unknown as { _id: { toString(): string } })._id.toString();
+          }
+        }
+
         await this.metaModel.findByIdAndUpdate(metaId, {
           processingStatus: 'complete',
-          draftTaskCount: taskCount,
+          draftTaskCount: richTasks.length,
+          ...(reviewBatchId ? { reviewBatchId } : {}),
         });
 
-        if (taskCount > 0) {
-          const patient = await this.usersService.findById(patientId);
+        const patient = await this.usersService.findById(patientId);
+        const navigatorId = patient?.assignedNavigatorId?.toString();
+
+        if (richTasks.length > 0 && navigatorId && reviewBatchId) {
+          this.eventsGateway.emitReviewBatchReady(navigatorId, {
+            reviewBatchId,
+            patientId,
+            patientName: (patient as unknown as { name?: string })?.name,
+            taskCount: richTasks.length,
+            documentName: originalName,
+          });
+
           await this.alertsService.create({
             patientId: new Types.ObjectId(patientId),
             navigatorId: patient?.assignedNavigatorId || null,
             type: 'DOCUMENT_REVIEW',
             severity: 'LOW',
-            reason: `${taskCount} draft task${taskCount === 1 ? '' : 's'} from ${originalName}`,
+            reason: `${richTasks.length} task${richTasks.length === 1 ? '' : 's'} extracted from ${originalName} — review required`,
             status: 'pending',
           });
         }

@@ -5,6 +5,7 @@ import { Message, MessageSchema } from './message.schema';
 import { User, UserSchema } from '../users/user.schema';
 import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
+import { EventsModule } from '../events/events.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { MessagesController } from './messages.controller';
       { name: Message.name, schema: MessageSchema },
       { name: User.name, schema: UserSchema },
     ]),
+    EventsModule,
   ],
   controllers: [MessagesController],
   providers: [MessagesService],

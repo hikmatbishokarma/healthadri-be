@@ -12,37 +12,42 @@ import * as path from 'path';
 import AdmZip = require('adm-zip');
 import { SarvamAIClient } from 'sarvamai';
 import { AiAuditLog, AiAuditLogDocument } from './schemas/ai-audit-log.schema';
-import { TasksService } from '../tasks/tasks.service';
 
-interface ParsedTask {
-  type: 'visit' | 'test';
-  title: string;
-  date: string;
+export interface RichParsedTask {
+  taskType: 'MEDICATION' | 'LAB_TEST' | 'APPOINTMENT' | 'PROCEDURE';
+  confidence: number;
+  sourceText: string;
+  extractedData: Record<string, unknown>;
 }
 
-const SYSTEM_PROMPT = `You are a medical document parser.
-Extract ONLY actionable medical tasks from the document.
-Return STRICT JSON only.`;
+const RICH_SYSTEM_PROMPT = `You are a clinical document parser for a cancer care platform.
+Extract structured medical tasks from the document.
+Return STRICT JSON only. No explanations.`;
 
-const USER_PROMPT_TEMPLATE = `Extract tasks in this format:
+const RICH_USER_PROMPT_TEMPLATE = `Extract all medical tasks from this document. Return JSON exactly:
 
 {
   "tasks": [
     {
-      "type": "visit | test",
-      "title": "string",
-      "date": "YYYY-MM-DD"
+      "taskType": "MEDICATION | LAB_TEST | APPOINTMENT | PROCEDURE",
+      "confidence": 0.0-1.0,
+      "sourceText": "exact quoted text from document",
+      "extractedData": {
+        // For MEDICATION: medicineName, dosage, frequency, timing (before_food|after_food|with_food|anytime), duration
+        // For LAB_TEST: testName, labName, scheduledDate (YYYY-MM-DD or null)
+        // For APPOINTMENT: doctorName, specialty, scheduledDate (YYYY-MM-DD or null), location
+        // For PROCEDURE: procedureName, scheduledDate (YYYY-MM-DD or null), location
+      }
     }
   ]
 }
 
 Rules:
-- Only include future tasks
-- Ignore past events
-- Ignore irrelevant text
-- If date is missing or unclear → skip task
-- Do NOT hallucinate
-- Do NOT explain anything
+- Include ALL medications, tests, appointments, procedures mentioned
+- Set confidence based on how clearly the text states the task (0.0 = unclear, 1.0 = explicit)
+- sourceText must be a direct quote from the document
+- Use null for any field you cannot determine
+- Do NOT hallucinate values
 - Return ONLY JSON
 
 Document:
@@ -58,36 +63,24 @@ export class DocumentProcessingService {
   constructor(
     @InjectModel(AiAuditLog.name)
     private auditModel: Model<AiAuditLogDocument>,
-    private tasksService: TasksService,
     config: ConfigService,
   ) {
     const apiSubscriptionKey = config.get<string>('SARVAM_API_KEY');
     this.client = new SarvamAIClient({ apiSubscriptionKey });
   }
 
-  async extractTextFromBuffer(
-    buffer: Buffer,
-    originalName: string,
-  ): Promise<string> {
+  async extractTextFromBuffer(buffer: Buffer, originalName: string): Promise<string> {
     if (!buffer || buffer.length === 0) {
       throw new BadRequestException('file is required');
     }
     const tempPath = await this.writeTempFile(buffer, originalName);
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const outputPath = path.join(
-      process.cwd(),
-      'output',
-      `extracted-${unique}.md`,
-    );
+    const outputPath = path.join(process.cwd(), 'output', `extracted-${unique}.md`);
     try {
       return await this.runOcr(tempPath, outputPath);
     } finally {
-      fs.promises.unlink(tempPath).catch(() => {
-        /* file may already be gone */
-      });
-      fs.promises.unlink(outputPath).catch(() => {
-        /* file may already be gone */
-      });
+      fs.promises.unlink(tempPath).catch(() => {});
+      fs.promises.unlink(outputPath).catch(() => {});
     }
   }
 
@@ -96,7 +89,7 @@ export class DocumentProcessingService {
     fileBuffer: Buffer,
     originalName: string,
     sourceDocumentId: string | null = null,
-  ) {
+  ): Promise<{ success: boolean; message: string; richTasks: RichParsedTask[] }> {
     if (!patientId || !Types.ObjectId.isValid(patientId)) {
       throw new BadRequestException('valid patientId is required');
     }
@@ -114,59 +107,88 @@ export class DocumentProcessingService {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'OCR failed';
         this.logger.error(`OCR failed: ${message}`);
-        await this.writeAudit({
-          patientId,
-          filePath: tempPath,
-          error: `OCR: ${message}`,
-        });
+        await this.writeAudit({ patientId, filePath: tempPath, error: `OCR: ${message}` });
         throw new InternalServerErrorException(`OCR failed: ${message}`);
       }
 
-      const { tasks, llmResponse, rawContent, parseError } =
-        await this.extractTasks(extractedText);
+      const { richTasks } = await this.extractRichTasks(extractedText);
 
       await this.writeAudit({
         patientId,
         filePath: tempPath,
         extractedText,
-        llmResponse,
-        rawLlmContent: rawContent,
-        parsedTasks: tasks,
-        error: parseError,
-      });
-
-      if (tasks.length === 0) {
-        return {
-          success: true,
-          message: parseError
-            ? 'Document processed but tasks could not be parsed'
-            : 'No actionable tasks found',
-          tasks: [],
-        };
-      }
-
-      const saved = await this.tasksService.createDrafts(
-        patientId,
+        parsedTasks: richTasks,
         sourceDocumentId,
-        tasks,
-      );
+      });
 
       return {
         success: true,
-        message: 'Document processed successfully',
-        tasks: saved,
+        message: richTasks.length > 0 ? 'Document processed successfully' : 'No actionable tasks found',
+        richTasks,
       };
     } finally {
-      fs.promises.unlink(tempPath).catch(() => {
-        /* file may already be gone */
-      });
+      fs.promises.unlink(tempPath).catch(() => {});
     }
   }
 
-  private async writeTempFile(
-    buffer: Buffer,
-    originalName: string,
-  ): Promise<string> {
+  async extractRichTasks(extractedText: string): Promise<{ richTasks: RichParsedTask[] }> {
+    try {
+      const completion = await this.client.chat.completions({
+        model: 'sarvam-105b',
+        temperature: 0,
+        messages: [
+          { role: 'system', content: RICH_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: RICH_USER_PROMPT_TEMPLATE.replace('{{TEXT}}', extractedText),
+          },
+        ],
+      });
+
+      const raw = completion.choices?.[0]?.message?.content ?? '';
+      const jsonStart = raw.indexOf('{');
+      const jsonEnd = raw.lastIndexOf('}');
+      if (jsonStart === -1 || jsonEnd === -1) return { richTasks: [] };
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+      } catch {
+        return { richTasks: [] };
+      }
+
+      const rawTasks = (parsed as { tasks?: unknown })?.tasks;
+      if (!Array.isArray(rawTasks)) return { richTasks: [] };
+
+      const VALID_TYPES = new Set(['MEDICATION', 'LAB_TEST', 'APPOINTMENT', 'PROCEDURE']);
+      const richTasks: RichParsedTask[] = [];
+
+      for (const t of rawTasks) {
+        const obj = t as Partial<RichParsedTask> & { extractedData?: unknown };
+        if (
+          typeof obj.taskType === 'string' &&
+          VALID_TYPES.has(obj.taskType) &&
+          typeof obj.confidence === 'number' &&
+          obj.extractedData &&
+          typeof obj.extractedData === 'object'
+        ) {
+          richTasks.push({
+            taskType: obj.taskType as RichParsedTask['taskType'],
+            confidence: Math.min(1, Math.max(0, obj.confidence)),
+            sourceText: typeof obj.sourceText === 'string' ? obj.sourceText : '',
+            extractedData: obj.extractedData as Record<string, unknown>,
+          });
+        }
+      }
+
+      return { richTasks };
+    } catch (err) {
+      this.logger.warn(`Rich extraction failed: ${err instanceof Error ? err.message : err}`);
+      return { richTasks: [] };
+    }
+  }
+
+  private async writeTempFile(buffer: Buffer, originalName: string): Promise<string> {
     const uploadDir = path.join(process.cwd(), 'uploads');
     await fs.promises.mkdir(uploadDir, { recursive: true });
     const ext = path.extname(originalName) || '';
@@ -177,9 +199,7 @@ export class DocumentProcessingService {
   }
 
   private async runOcr(filePath: string, outputPath: string): Promise<string> {
-    const job = await this.client.documentIntelligence.createJob({
-      outputFormat: 'md',
-    });
+    const job = await this.client.documentIntelligence.createJob({ outputFormat: 'md' });
     await job.uploadFile(filePath);
     await job.start();
     await job.waitUntilComplete();
@@ -195,12 +215,8 @@ export class DocumentProcessingService {
 
     // Sarvam Document Intelligence returns a ZIP archive containing
     // `document.md` + metadata. Detect via the PK magic header.
-    const isZip =
-      buffer.length >= 2 && buffer[0] === 0x50 && buffer[1] === 0x4b;
-
-    if (!isZip) {
-      return buffer.toString('utf-8');
-    }
+    const isZip = buffer.length >= 2 && buffer[0] === 0x50 && buffer[1] === 0x4b;
+    if (!isZip) return buffer.toString('utf-8');
 
     const zip = new AdmZip(buffer);
     const mdEntry =
@@ -210,96 +226,15 @@ export class DocumentProcessingService {
     if (!mdEntry) {
       throw new Error('OCR output archive did not contain a markdown file');
     }
-
     return mdEntry.getData().toString('utf-8');
-  }
-
-  private async extractTasks(extractedText: string): Promise<{
-    tasks: ParsedTask[];
-    llmResponse: Record<string, unknown>;
-    rawContent: string;
-    parseError?: string;
-  }> {
-    const completion = await this.client.chat.completions({
-      model: 'sarvam-105b',
-      temperature: 0,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: USER_PROMPT_TEMPLATE.replace('{{TEXT}}', extractedText),
-        },
-      ],
-    });
-
-    const llmResponse = completion as unknown as Record<string, unknown>;
-    const rawContent = completion.choices?.[0]?.message?.content ?? '';
-
-    const parsed = this.safeParseTasks(rawContent);
-    if (parsed.error) {
-      this.logger.warn(`LLM returned invalid JSON: ${parsed.error}`);
-    }
-
-    return {
-      tasks: parsed.tasks,
-      llmResponse,
-      rawContent,
-      parseError: parsed.error,
-    };
-  }
-
-  private safeParseTasks(raw: string): {
-    tasks: ParsedTask[];
-    error?: string;
-  } {
-    if (!raw) return { tasks: [], error: 'empty response' };
-
-    const jsonStart = raw.indexOf('{');
-    const jsonEnd = raw.lastIndexOf('}');
-    if (jsonStart === -1 || jsonEnd === -1) {
-      return { tasks: [], error: 'no JSON object found' };
-    }
-    const slice = raw.slice(jsonStart, jsonEnd + 1);
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(slice);
-    } catch (err) {
-      return {
-        tasks: [],
-        error: err instanceof Error ? err.message : 'parse failed',
-      };
-    }
-
-    const tasksRaw = (parsed as { tasks?: unknown })?.tasks;
-    if (!Array.isArray(tasksRaw)) {
-      return { tasks: [], error: 'tasks is not an array' };
-    }
-
-    const tasks: ParsedTask[] = [];
-    for (const t of tasksRaw) {
-      const obj = t as Partial<ParsedTask>;
-      if (
-        (obj.type === 'visit' || obj.type === 'test') &&
-        typeof obj.title === 'string' &&
-        typeof obj.date === 'string'
-      ) {
-        const d = new Date(obj.date);
-        if (!isNaN(d.getTime())) {
-          tasks.push({ type: obj.type, title: obj.title, date: obj.date });
-        }
-      }
-    }
-    return { tasks };
   }
 
   private async writeAudit(entry: {
     patientId: string;
     filePath: string;
     extractedText?: string;
-    llmResponse?: Record<string, unknown>;
-    rawLlmContent?: string;
     parsedTasks?: unknown[];
+    sourceDocumentId?: string | null;
     error?: string;
   }) {
     try {
@@ -309,15 +244,11 @@ export class DocumentProcessingService {
         patientId: new Types.ObjectId(entry.patientId),
         filePath: entry.filePath,
         extractedText: entry.extractedText,
-        llmResponse: entry.llmResponse,
-        rawLlmContent: entry.rawLlmContent,
         parsedTasks: entry.parsedTasks ?? [],
         error: entry.error,
       });
     } catch (err) {
-      this.logger.error(
-        `Failed to write audit log: ${err instanceof Error ? err.message : err}`,
-      );
+      this.logger.error(`Failed to write audit log: ${err instanceof Error ? err.message : err}`);
     }
   }
 }

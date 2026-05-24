@@ -47,6 +47,11 @@ export class DocumentsController {
       'Content-Disposition',
       `inline; filename="${encodeURIComponent(meta.fileName)}"`,
     );
+    stream.on('error', () => {
+      if (!res.headersSent) {
+        res.status(404).json({ message: 'File not found in storage' });
+      }
+    });
     stream.pipe(res);
   }
 

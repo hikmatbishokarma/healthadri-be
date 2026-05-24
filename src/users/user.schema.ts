@@ -84,13 +84,34 @@ export class User {
 
   // caregiver info captured during patient onboarding (before caregiver registers)
   @Prop({ default: '' })
+  caregiverName: string;
+
+  @Prop({ default: '' })
   caregiverPhone: string;
 
   @Prop({ default: '' })
   caregiverRelationship: string;
 
+  @Prop({ default: '' })
+  abhaNumber: string;
+
+  @Prop({ default: '' })
+  emergencyContactPhone: string;
+
+  @Prop({ default: '' })
+  doctorName: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'Doctor', default: null })
+  doctorId: Types.ObjectId;
+
   @Prop({ default: null })
   lastActiveAt: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'CarePlanVersion', default: null })
+  activeCarePlanVersionId: Types.ObjectId | null;
+
+  @Prop({ type: [String], default: [] })
+  pushTokens: string[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

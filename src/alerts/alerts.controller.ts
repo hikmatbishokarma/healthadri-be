@@ -5,6 +5,11 @@ import { AlertsService } from './alerts.service';
 export class AlertsController {
   constructor(private alertsService: AlertsService) {}
 
+  @Get('navigator/:navigatorId')
+  async getByNavigator(@Param('navigatorId') navigatorId: string) {
+    return this.alertsService.findPendingByNavigator(navigatorId);
+  }
+
   @Get('patient/:patientId')
   async getByPatient(@Param('patientId') patientId: string) {
     return this.alertsService.findLatestByPatient(patientId);

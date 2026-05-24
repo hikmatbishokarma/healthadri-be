@@ -28,4 +28,9 @@ export class AuthController {
   async adminLogin(@Body() dto: AdminLoginDto) {
     return this.authService.adminLogin(dto.email, dto.password);
   }
+
+  @Post('web/login')
+  async webLogin(@Body() dto: AdminLoginDto) {
+    return this.authService.webLogin(dto.email, dto.password);
+  }
 }

@@ -2,15 +2,27 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Alert, AlertDocument } from './alert.schema';
+import { EventsGateway } from '../events/events.gateway';
 
 @Injectable()
 export class AlertsService {
   constructor(
     @InjectModel(Alert.name) private alertModel: Model<AlertDocument>,
+    private eventsGateway: EventsGateway,
   ) {}
 
   async create(data: Partial<Alert>) {
-    return this.alertModel.create(data);
+    const alert = await this.alertModel.create(data);
+    if (data.navigatorId) {
+      this.eventsGateway.emitNewAlert(data.navigatorId.toString(), {
+        _id: alert._id,
+        patientId: alert.patientId,
+        severity: alert.severity,
+        type: alert.type,
+        reason: alert.reason,
+      });
+    }
+    return alert;
   }
 
   async findPendingByNavigator(navigatorId: string) {
