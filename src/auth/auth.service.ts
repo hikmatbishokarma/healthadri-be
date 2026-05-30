@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import * as admin from 'firebase-admin';
+import * as fs from 'fs';
+import * as path from 'path';
 import { InviteCodeService } from '../invite-code/invite-code.service';
 import { UsersService } from '../users/users.service';
 
@@ -25,12 +28,15 @@ export class AuthService {
     phone: string,
     otp: string,
     role?: 'patient' | 'caregiver' | 'navigator',
+    skipOtpCheck = false,
   ) {
-    const expected = this.otps.get(phone) ?? STATIC_OTP;
-    if (otp !== expected) {
-      throw new UnauthorizedException('Invalid OTP');
+    if (!skipOtpCheck) {
+      const expected = this.otps.get(phone) ?? STATIC_OTP;
+      if (otp !== expected) {
+        throw new UnauthorizedException('Invalid OTP');
+      }
+      this.otps.delete(phone);
     }
-    this.otps.delete(phone);
 
     if (role === 'navigator') {
       const navigator = await this.usersService.findByPhone(phone);
@@ -178,6 +184,45 @@ export class AuthService {
         linkedPatientId: user.linkedPatientId ?? null,
       },
     };
+  }
+
+  async firebaseVerify(
+    idToken: string,
+    role?: 'patient' | 'caregiver',
+  ) {
+    let decoded: admin.auth.DecodedIdToken;
+    try {
+      const app = this.getFirebaseApp();
+      decoded = await admin.auth(app).verifyIdToken(idToken);
+    } catch {
+      throw new UnauthorizedException('Invalid Firebase token');
+    }
+
+    if (!decoded.phone_number) {
+      throw new UnauthorizedException('Firebase token contains no phone number');
+    }
+
+    // Firebase returns +91XXXXXXXXXX — strip the country code to match stored format
+    const phone = decoded.phone_number.startsWith('+91')
+      ? decoded.phone_number.slice(3)
+      : decoded.phone_number;
+
+    // Reuse the same user-lookup / creation logic as verifyOtp
+    return this.verifyOtp(phone, STATIC_OTP, role, true);
+  }
+
+  private getFirebaseApp(): admin.app.App {
+    if (admin.apps.length > 0) return admin.app();
+    const value = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (!value) throw new Error('FIREBASE_SERVICE_ACCOUNT not configured');
+    let serviceAccount: admin.ServiceAccount;
+    if (value.trim().startsWith('{')) {
+      serviceAccount = JSON.parse(value) as admin.ServiceAccount;
+    } else {
+      const resolved = path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);
+      serviceAccount = JSON.parse(fs.readFileSync(resolved, 'utf8')) as admin.ServiceAccount;
+    }
+    return admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
   }
 
   async adminLogin(email: string, password: string) {

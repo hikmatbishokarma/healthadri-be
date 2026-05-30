@@ -11,6 +11,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateProfileDto {
@@ -68,12 +69,12 @@ export class UpdateProfileDto {
   @IsDateString()
   dateOfDiagnosis?: string;
 
-  @IsOptional()
+  @ValidateIf(o => !!o.alternatePhone)
   @IsString()
   @Matches(/^\+?[0-9]{7,15}$/, { message: 'alternatePhone must be a valid phone number' })
   alternatePhone?: string;
 
-  @IsOptional()
+  @ValidateIf(o => !!o.caregiverPhone)
   @IsString()
   @Matches(/^\+?[0-9]{7,15}$/, { message: 'caregiverPhone must be a valid phone number' })
   caregiverPhone?: string;
@@ -93,7 +94,7 @@ export class UpdateProfileDto {
   @MaxLength(30)
   abhaNumber?: string;
 
-  @IsOptional()
+  @ValidateIf(o => !!o.emergencyContactPhone)
   @IsString()
   @Matches(/^\+?[0-9]{7,15}$/, { message: 'emergencyContactPhone must be a valid phone number' })
   emergencyContactPhone?: string;

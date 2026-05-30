@@ -2,6 +2,7 @@ import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { CaregiverLinkDto } from './dto/caregiver-link.dto';
+import { FirebaseVerifyDto } from './dto/firebase-verify.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 
@@ -17,6 +18,11 @@ export class AuthController {
   @Post('verify-otp')
   async verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto.phone, dto.otp, dto.role);
+  }
+
+  @Post('firebase-verify')
+  async firebaseVerify(@Body() dto: FirebaseVerifyDto) {
+    return this.authService.firebaseVerify(dto.idToken, dto.role);
   }
 
   @Post('caregiver/link')
