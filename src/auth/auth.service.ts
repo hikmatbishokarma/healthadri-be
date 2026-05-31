@@ -108,12 +108,11 @@ export class AuthService {
       );
     }
     if (!user) {
-      const navigator = await this.usersService.findFirstNavigator();
       user = await this.usersService.create({
         name: `Patient ${phone.slice(-4)}`,
         phone,
         role: 'patient',
-        assignedNavigatorId: navigator?._id?.toString(),
+        assignedNavigatorId: null,
       });
     }
 

@@ -11,6 +11,12 @@ export class SymptomEntryController {
     return this.symptomEntryService.create(dto);
   }
 
+  @Get('latest')
+  async latest(@Query('patientId') patientId: string) {
+    if (!patientId) return null;
+    return this.symptomEntryService.findLatestByPatient(patientId);
+  }
+
   @Get('history')
   async history(
     @Query('patientId') patientId: string,

@@ -14,18 +14,20 @@ export class ReportsService {
     private entryModel: Model<SymptomEntryDocument>,
   ) {}
 
-  async getWeekly(patientId: string) {
+  async getWeekly(patientId: string, weeksBack = 0) {
     if (!patientId || !Types.ObjectId.isValid(patientId)) {
       throw new BadRequestException('valid patientId is required');
     }
 
-    // Rolling 7-day window ending today (IST), so column 6 is always today.
+    const n = 7;
     const todayStart = startOfDayIST(new Date());
-    const start = addDays(todayStart, -6);
-    const end = addDays(todayStart, 1);
+    // Slide the 7-day window back by weeksBack weeks
+    const windowEnd = addDays(todayStart, 1 - weeksBack * 7);
+    const start = addDays(windowEnd, -7);
+    const end = windowEnd;
 
     const weekDays: string[] = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < n; i++) {
       weekDays.push(dayNameIST(addDays(start, i)));
     }
 
@@ -36,22 +38,23 @@ export class ReportsService {
       })
       .lean();
 
-    const data: Record<string, number[]> = {};
+    const data: Record<string, (number | null)[]> = {};
 
     for (const entry of entries) {
       const entryDayStart = startOfDayIST(new Date(entry.createdAt as Date));
       const dayIdx = Math.round(
         (entryDayStart.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
       );
-      if (dayIdx < 0 || dayIdx > 6) continue;
+      if (dayIdx < 0 || dayIdx >= 7) continue;
 
       for (const r of entry.responses || []) {
         if (!r?.name) continue;
         if (!data[r.name]) {
-          data[r.name] = [0, 0, 0, 0, 0, 0, 0];
+          data[r.name] = Array(n).fill(null);
         }
         const value = Number(r.value) || 0;
-        if (value > data[r.name][dayIdx]) {
+        const current = data[r.name][dayIdx];
+        if (current === null || value > current) {
           data[r.name][dayIdx] = value;
         }
       }

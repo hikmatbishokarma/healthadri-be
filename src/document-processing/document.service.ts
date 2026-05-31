@@ -10,6 +10,7 @@ import { Model, Types } from 'mongoose';
 import * as fs from 'fs';
 import * as path from 'path';
 import AdmZip = require('adm-zip');
+import { PDFDocument } from 'pdf-lib';
 import { SarvamAIClient } from 'sarvamai';
 import { AiAuditLog, AiAuditLogDocument } from './schemas/ai-audit-log.schema';
 
@@ -132,18 +133,34 @@ export class DocumentProcessingService {
   }
 
   async extractRichTasks(extractedText: string): Promise<{ richTasks: RichParsedTask[] }> {
+    // Truncate to ~8000 chars — keeps cost low and prevents AI timeouts
+    const truncatedText = extractedText.length > 8000
+      ? extractedText.slice(0, 8000) + '\n...[truncated]'
+      : extractedText;
+
+    const attempt = async () => this.client.chat.completions({
+      model: 'sarvam-105b',
+      temperature: 0,
+      messages: [
+        { role: 'system', content: RICH_SYSTEM_PROMPT },
+        { role: 'user', content: RICH_USER_PROMPT_TEMPLATE.replace('{{TEXT}}', truncatedText) },
+      ],
+    });
+
     try {
-      const completion = await this.client.chat.completions({
-        model: 'sarvam-105b',
-        temperature: 0,
-        messages: [
-          { role: 'system', content: RICH_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: RICH_USER_PROMPT_TEMPLATE.replace('{{TEXT}}', extractedText),
-          },
-        ],
-      });
+      let completion: Awaited<ReturnType<typeof attempt>>;
+      try {
+        completion = await attempt();
+      } catch (firstErr) {
+        // One retry on timeout
+        const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+        if (msg.toLowerCase().includes('timeout')) {
+          this.logger.warn('Extraction timed out — retrying once');
+          completion = await attempt();
+        } else {
+          throw firstErr;
+        }
+      }
 
       const raw = completion.choices?.[0]?.message?.content ?? '';
       const jsonStart = raw.indexOf('{');
@@ -198,11 +215,29 @@ export class DocumentProcessingService {
     return tempPath;
   }
 
+  private async truncatePdfIfNeeded(filePath: string, maxPages = 10): Promise<string> {
+    const buffer = await fs.promises.readFile(filePath);
+    const pdf = await PDFDocument.load(buffer);
+    if (pdf.getPageCount() <= maxPages) return filePath;
+
+    this.logger.warn(`PDF has ${pdf.getPageCount()} pages — truncating to first ${maxPages} for OCR`);
+    const truncated = await PDFDocument.create();
+    const pages = await truncated.copyPages(pdf, Array.from({ length: maxPages }, (_, i) => i));
+    pages.forEach((p) => truncated.addPage(p));
+
+    const truncatedBytes = await truncated.save();
+    const truncatedPath = filePath.replace(/(\.\w+)$/, `-truncated$1`);
+    await fs.promises.writeFile(truncatedPath, truncatedBytes);
+    return truncatedPath;
+  }
+
   private async runOcr(filePath: string, outputPath: string): Promise<string> {
+    const ocrPath = await this.truncatePdfIfNeeded(filePath);
     const job = await this.client.documentIntelligence.createJob({ outputFormat: 'md' });
-    await job.uploadFile(filePath);
+    await job.uploadFile(ocrPath);
     await job.start();
     await job.waitUntilComplete();
+    if (ocrPath !== filePath) fs.promises.unlink(ocrPath).catch(() => {});
 
     await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
     await job.downloadOutput(outputPath);

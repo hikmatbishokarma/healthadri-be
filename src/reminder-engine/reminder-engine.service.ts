@@ -155,31 +155,45 @@ export class ReminderEngineService {
   async dispatchDueNotifications(): Promise<void> {
     const now = new Date();
     const due = await this.reminderModel
-      .find({
-        status: ReminderStatus.PENDING,
-        notifyAt: { $lte: now },
-      })
+      .find({ status: ReminderStatus.PENDING, notifyAt: { $lte: now } })
       .lean();
 
     if (due.length === 0) return;
 
-    for (const reminder of due) {
-      const patient = await this.usersService.findById(reminder.patientId.toString());
+    // Group by patient + scheduledAt slot so one notification covers all meds at that time
+    const groups = new Map<string, typeof due>();
+    for (const r of due) {
+      const key = `${r.patientId}::${r.scheduledAt.toISOString()}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(r);
+    }
+
+    for (const [, reminders] of groups) {
+      const patientId = reminders[0].patientId.toString();
+      const scheduledAt = reminders[0].scheduledAt;
+      const patient = await this.usersService.findById(patientId);
       if (!patient) continue;
 
       const tokens: string[] = (patient as unknown as { pushTokens?: string[] }).pushTokens ?? [];
-      if (tokens.length > 0) {
-        const time = reminder.scheduledAt.toLocaleTimeString('en-IN', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        });
-        await this.pushService.sendToTokens(tokens, {
-          title: `Time for your ${time} meds`,
-          body: `${reminder.taskTitle} — tap to take or skip`,
-          data: { reminderId: (reminder as unknown as { _id: { toString(): string } })._id.toString(), type: 'MEDICATION_REMINDER' },
-        });
-      }
+      if (tokens.length === 0) continue;
+
+      const time = scheduledAt.toLocaleTimeString('en-IN', {
+        hour: '2-digit', minute: '2-digit', hour12: true,
+      });
+      const medNames = reminders.map((r) => r.taskTitle).join(', ');
+
+      await this.pushService.sendToTokens(tokens, {
+        title: `Time for your ${time} meds`,
+        body: reminders.length === 1
+          ? `${reminders[0].taskTitle} — tap to take or skip`
+          : `${reminders.length} medications due — ${medNames.slice(0, 60)}`,
+        data: {
+          type: 'MEDICATION_DUE',
+          patientId,
+          scheduledAt: scheduledAt.toISOString(),
+          screen: 'MedicationAlarm',
+        },
+      });
     }
 
     const ids = due.map((r) => (r as unknown as { _id: Types.ObjectId })._id);
@@ -188,7 +202,7 @@ export class ReminderEngineService {
       { status: ReminderStatus.SENT, sentAt: now },
     );
 
-    this.logger.log(`Dispatched push for ${due.length} reminders`);
+    this.logger.log(`Dispatched ${groups.size} grouped push notifications for ${due.length} reminders`);
   }
 
   // ── Cron: mark overdue SENT/PENDING reminders as MISSED ─────────────────────
@@ -343,6 +357,29 @@ export class ReminderEngineService {
     return results;
   }
 
+  async sendTestNotification(patientId: string): Promise<void> {
+    const patient = await this.usersService.findById(patientId);
+    if (!patient) return;
+    const tokens: string[] = (patient as unknown as { pushTokens?: string[] }).pushTokens ?? [];
+    if (tokens.length === 0) {
+      this.logger.warn(`No push tokens for patient ${patientId}`);
+      return;
+    }
+    const now = new Date();
+    const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    await this.pushService.sendToTokens(tokens, {
+      title: `Test: Time for your ${time} meds`,
+      body: 'TAB APRIDEZ · TAB BILATIS M · 5 CRM. LIZOLE CREAM',
+      data: {
+        type: 'MEDICATION_DUE',
+        patientId,
+        scheduledAt: now.toISOString(),
+        screen: 'MedicationAlarm',
+      },
+    });
+    this.logger.log(`Test notification sent to patient ${patientId}`);
+  }
+
   // ── Queries ──────────────────────────────────────────────────────────────────
 
   async getForPatient(
@@ -360,11 +397,35 @@ export class ReminderEngineService {
       filter.scheduledAt = range;
     }
 
-    return this.reminderModel
+    const reminders = await this.reminderModel
       .find(filter)
       .sort({ scheduledAt: 1 })
-      .limit(options.limit ?? 50)
+      .limit(options.limit ?? 200)
+      .populate('carePlanTaskId', 'taskData title type')
       .lean();
+
+    // Deduplicate: per (carePlanTaskId, calendar-date) keep the one with highest priority status
+    // Priority: PATIENT_CONFIRMED > SKIPPED > MISSED > PENDING
+    const statusPriority: Record<string, number> = {
+      PATIENT_CONFIRMED: 4, CAREGIVER_CONFIRMED: 4,
+      SKIPPED: 3, MISSED: 2, SENT: 1, PENDING: 0,
+    };
+    const seen = new Map<string, typeof reminders[0]>();
+    for (const r of reminders) {
+      const taskId = r.carePlanTaskId
+        ? ((r.carePlanTaskId as unknown as { _id: { toString(): string } })._id ?? r.carePlanTaskId).toString()
+        : r.carePlanTaskId?.toString() ?? '';
+      const dateKey = `${taskId}::${new Date(r.scheduledAt).toISOString().slice(0, 10)}`;
+      const existing = seen.get(dateKey);
+      const curPriority = statusPriority[r.status] ?? 0;
+      const exPriority = existing ? (statusPriority[existing.status] ?? 0) : -1;
+      if (!existing || curPriority > exPriority) {
+        seen.set(dateKey, r);
+      }
+    }
+    return Array.from(seen.values()).sort(
+      (a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime(),
+    );
   }
 
   async getAdherenceSummary(patientId: string): Promise<{

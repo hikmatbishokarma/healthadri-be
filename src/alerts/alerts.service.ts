@@ -43,8 +43,13 @@ export class AlertsService {
   }
 
   async findOneLatestByPatient(patientId: string) {
+    // Only symptom-driven alerts reflect "how the patient feels".
+    // Operational alerts (e.g. DOCUMENT_REVIEW) must not drive the patient status.
     return this.alertModel
-      .findOne({ patientId: new Types.ObjectId(patientId) })
+      .findOne({
+        patientId: new Types.ObjectId(patientId),
+        type: { $regex: /^HIGH_/ },
+      })
       .sort({ createdAt: -1 });
   }
 

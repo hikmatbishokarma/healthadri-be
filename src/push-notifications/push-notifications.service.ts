@@ -75,8 +75,11 @@ export class PushNotificationsService implements OnModuleInit {
         body: JSON.stringify(messages),
       });
 
+      const responseText = await response.text();
       if (!response.ok) {
-        this.logger.warn(`Expo Push API error: ${response.status} ${await response.text()}`);
+        this.logger.warn(`Expo Push API error: ${response.status} ${responseText}`);
+      } else {
+        this.logger.log(`Expo Push API response: ${responseText}`);
       }
     } catch (err) {
       this.logger.warn(`Expo push send failed: ${err}`);

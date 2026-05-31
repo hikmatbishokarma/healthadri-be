@@ -306,7 +306,16 @@ export class ReviewQueueService {
     return { batch: batchForResponse, tasks: tasksWithDiff };
   }
 
-  async verifyTask(taskId: string, navigatorId: string): Promise<AiExtractedTask> {
+  private async taskWithDiff(task: AiExtractedTaskDocument): Promise<AiExtractedTask & { diff: TaskDiff }> {
+    const batch = await this.batchModel.findById(task.reviewBatchId).lean();
+    const patientId = batch?.patientId?.toString() ?? '';
+    const activeTasks = patientId
+      ? ((await this.carePlanService.getActiveTasksForPatient(patientId)) ?? [])
+      : [];
+    return { ...(task.toObject ? task.toObject() : task), diff: this.computeDiff(task, activeTasks) };
+  }
+
+  async verifyTask(taskId: string, navigatorId: string): Promise<AiExtractedTask & { diff: TaskDiff }> {
     const task = await this.taskModel.findById(taskId);
     if (!task) throw new NotFoundException('Task not found');
     if (task.reviewStatus === ReviewStatus.REJECTED) {
@@ -319,14 +328,14 @@ export class ReviewQueueService {
     await task.save();
 
     await this.updateBatchCounts(task.reviewBatchId.toString());
-    return task;
+    return this.taskWithDiff(task);
   }
 
   async editTask(
     taskId: string,
     navigatorId: string,
     edits: Record<string, unknown>,
-  ): Promise<AiExtractedTask> {
+  ): Promise<AiExtractedTask & { diff: TaskDiff }> {
     const task = await this.taskModel.findById(taskId);
     if (!task) throw new NotFoundException('Task not found');
     if (task.reviewStatus === ReviewStatus.REJECTED) {
@@ -341,10 +350,10 @@ export class ReviewQueueService {
     await task.save();
 
     await this.updateBatchCounts(task.reviewBatchId.toString());
-    return task;
+    return this.taskWithDiff(task);
   }
 
-  async rejectTask(taskId: string, navigatorId: string): Promise<AiExtractedTask> {
+  async rejectTask(taskId: string, navigatorId: string): Promise<AiExtractedTask & { diff: TaskDiff }> {
     const task = await this.taskModel.findById(taskId);
     if (!task) throw new NotFoundException('Task not found');
 
@@ -354,7 +363,7 @@ export class ReviewQueueService {
     await task.save();
 
     await this.updateBatchCounts(task.reviewBatchId.toString());
-    return task;
+    return this.taskWithDiff(task);
   }
 
   async markBatchInReview(batchId: string): Promise<void> {
@@ -397,13 +406,34 @@ export class ReviewQueueService {
 
     const carePlanTasks: CreateCarePlanTaskDto[] = verifiedTasks.map((t) => {
       const data = t.extractedData as Record<string, unknown>;
+
+      let schedule: Record<string, unknown> | undefined;
+      let endDate: string | undefined = this.extractDate(data, 'scheduledDate');
+
+      if (t.taskType === 'MEDICATION') {
+        const times = this.parseMedicationTimes(data);
+        schedule = { times, intervalDays: 1, notifyBeforeMinutes: 15 };
+
+        // Derive endDate from duration if not already set (e.g. "30 days" → today + 30)
+        if (!endDate) {
+          const durationStr = typeof data.duration === 'string' ? data.duration : '';
+          const daysMatch = durationStr.match(/(\d+)\s*days?/i);
+          if (daysMatch) {
+            const end = new Date();
+            end.setDate(end.getDate() + parseInt(daysMatch[1], 10));
+            endDate = end.toISOString().split('T')[0];
+          }
+        }
+      }
+
       return {
         type: t.taskType,
         title: this.deriveTitle(t.taskType, data),
         severity: 'MEDIUM',
         taskData: data,
-        startDate: this.extractDate(data, 'scheduledDate'),
-        endDate: this.extractDate(data, 'scheduledDate'),
+        schedule,
+        startDate: new Date().toISOString().split('T')[0],
+        endDate,
         sourceExtractedTaskId: (t as unknown as { _id: { toString(): string } })._id.toString(),
       };
     });
@@ -561,6 +591,48 @@ export class ReviewQueueService {
   private extractDate(data: Record<string, unknown>, key: string): string | undefined {
     const val = data[key];
     return typeof val === 'string' && val ? val : undefined;
+  }
+
+  private parseMedicationTimes(data: Record<string, unknown>): string[] {
+    const timing = typeof data.timing === 'string' ? data.timing.toLowerCase().trim() : '';
+    const frequency = typeof data.frequency === 'string' ? data.frequency.toLowerCase().trim() : '';
+    const combined = `${timing} ${frequency}`;
+
+    // ── 1. Explicit timing words take priority ─────────────────────────────────
+
+    // Multi-time keywords
+    if (/morning.*(evening|night|dinner)|evening.*morning|(twice|bd|bid)/.test(combined)) {
+      return ['08:00', '20:00'];
+    }
+    if (/morning.*afternoon.*night|three.*times|tds|tid/.test(combined)) {
+      return ['08:00', '13:00', '20:00'];
+    }
+    if (/four.*times|qid/.test(combined)) {
+      return ['08:00', '12:00', '16:00', '20:00'];
+    }
+
+    // Single-time keywords
+    if (/bed\s?time|bedtime|\bhs\b/.test(combined))                             return ['22:00'];
+    if (/before\s+dinner|with\s+dinner|after\s+dinner|\bdinner\b/.test(combined)) return ['20:00'];
+    if (/before\s+lunch|with\s+lunch|after\s+lunch|\blunch\b/.test(combined))   return ['13:00'];
+    if (/\bnight\b/.test(combined))                                              return ['20:00'];
+    if (/\bevening\b/.test(combined))                                            return ['18:00'];
+    if (/\bafternoon\b/.test(combined))                                          return ['13:00'];
+    if (/\bmorning\b|before\s+breakfast|with\s+breakfast/.test(combined))       return ['08:00'];
+
+    // ── 2. ODS fallback: Morning-Afternoon-Night dose counts (0-0-1, 2-2-0…) ──
+    // Only used when no explicit timing words found above
+    const odsMatch = timing.match(/^(\d+)-(\d+)-(\d+)$/) || frequency.match(/^(\d+)-(\d+)-(\d+)$/);
+    if (odsMatch) {
+      const times: string[] = [];
+      if (parseInt(odsMatch[1]) > 0) times.push('08:00'); // morning
+      if (parseInt(odsMatch[2]) > 0) times.push('13:00'); // afternoon
+      if (parseInt(odsMatch[3]) > 0) times.push('20:00'); // night
+      if (times.length) return times;
+    }
+
+    // ── 3. Default ─────────────────────────────────────────────────────────────
+    return ['09:00'];
   }
 
   private async updateBatchCounts(batchId: string): Promise<void> {

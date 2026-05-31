@@ -96,4 +96,11 @@ export class ReminderEngineController {
     await this.reminderService.dispatchDueNotifications();
     return { ok: true };
   }
+
+  // DEV ONLY — send a test notification immediately to a patient
+  @Post('trigger/test/:patientId')
+  async triggerTest(@Param('patientId') patientId: string) {
+    await this.reminderService.sendTestNotification(patientId);
+    return { ok: true };
+  }
 }
