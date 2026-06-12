@@ -5,14 +5,39 @@ import { Symptom, SymptomDocument } from './symptom.schema';
 import { CreateSymptomDto } from './dto/create-symptom.dto';
 import { UpdateSymptomDto } from './dto/update-symptom.dto';
 
+export interface SymptomListQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: string;
+  order?: 'asc' | 'desc';
+}
+
 @Injectable()
 export class SymptomsService {
   constructor(
     @InjectModel(Symptom.name) private symptomModel: Model<SymptomDocument>,
   ) {}
 
-  async findAll() {
-    return this.symptomModel.find();
+  async findAll(query: SymptomListQuery = {}) {
+    const { page = 1, limit = 50, search, sortBy = 'name', order = 'asc' } = query;
+
+    const filter: Record<string, unknown> = {};
+    if (search) filter.name = { $regex: search, $options: 'i' };
+
+    const skip = (page - 1) * limit;
+    const sortDir = order === 'desc' ? -1 : 1;
+
+    const [data, total] = await Promise.all([
+      this.symptomModel
+        .find(filter)
+        .sort({ [sortBy]: sortDir })
+        .skip(skip)
+        .limit(limit),
+      this.symptomModel.countDocuments(filter),
+    ]);
+
+    return { data, total, page, limit, pageCount: Math.ceil(total / limit) };
   }
 
   async findById(id: string) {

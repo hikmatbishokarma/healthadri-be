@@ -31,6 +31,7 @@ import { CarePlanModule } from './care-plan/care-plan.module';
 import { ReminderEngineModule } from './reminder-engine/reminder-engine.module';
 import { EscalationModule } from './escalation/escalation.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
+import { MedicinesModule } from './medicines/medicines.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { PushNotificationsModule } from './push-notifications/push-notifications
     ReminderEngineModule,
     EscalationModule,
     PushNotificationsModule,
+    MedicinesModule,
   ],
 })
 export class AppModule {}

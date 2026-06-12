@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -25,13 +26,45 @@ export class UsersController {
   ) {}
 
   @Get('navigators')
-  async findNavigators() {
-    return this.usersService.findAllNavigators();
+  async findNavigators(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('hospitalId') hospitalId?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('order') order?: 'asc' | 'desc',
+  ) {
+    return this.usersService.findAllNavigators({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      search,
+      hospitalId,
+      sortBy,
+      order,
+    });
   }
 
   @Get('patients')
-  async findPatients() {
-    return this.usersService.findAllPatients();
+  async findPatients(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('hospitalId') hospitalId?: string,
+    @Query('navigatorId') navigatorId?: string,
+    @Query('cancerType') cancerType?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('order') order?: 'asc' | 'desc',
+  ) {
+    return this.usersService.findAllPatients({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      search,
+      hospitalId,
+      navigatorId,
+      cancerType,
+      sortBy,
+      order,
+    });
   }
 
   @Get('me')

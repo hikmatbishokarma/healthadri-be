@@ -5,6 +5,16 @@ import { Doctor, DoctorDocument } from './doctor.schema';
 import { CreateDoctorDto } from './dto/create-doctor.dto';
 import { UpdateDoctorDto } from './dto/update-doctor.dto';
 
+export interface DoctorListQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  hospitalId?: string;
+  specialty?: string;
+  sortBy?: string;
+  order?: 'asc' | 'desc';
+}
+
 @Injectable()
 export class DoctorsService {
   constructor(
@@ -12,9 +22,28 @@ export class DoctorsService {
     private doctorModel: Model<DoctorDocument>,
   ) {}
 
-  async findAll(search?: string) {
-    const filter = search ? { name: { $regex: search, $options: 'i' } } : {};
-    return this.doctorModel.find(filter).populate('hospitalId').sort({ name: 1 }).limit(20);
+  async findAll(query: DoctorListQuery = {}) {
+    const { page = 1, limit = 20, search, hospitalId, specialty, sortBy = 'name', order = 'asc' } = query;
+
+    const filter: Record<string, unknown> = {};
+    if (search) filter.name = { $regex: search, $options: 'i' };
+    if (hospitalId) filter.hospitalId = new Types.ObjectId(hospitalId);
+    if (specialty) filter.primarySpecialty = { $regex: specialty, $options: 'i' };
+
+    const skip = (page - 1) * limit;
+    const sortDir = order === 'desc' ? -1 : 1;
+
+    const [data, total] = await Promise.all([
+      this.doctorModel
+        .find(filter)
+        .populate('hospitalId')
+        .sort({ [sortBy]: sortDir })
+        .skip(skip)
+        .limit(limit),
+      this.doctorModel.countDocuments(filter),
+    ]);
+
+    return { data, total, page, limit, pageCount: Math.ceil(total / limit) };
   }
 
   async findById(id: string) {

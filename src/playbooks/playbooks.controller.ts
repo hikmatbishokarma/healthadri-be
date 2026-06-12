@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { PlaybooksService } from './playbooks.service';
 import { CreatePlaybookDto } from './dto/create-playbook.dto';
 import { UpdatePlaybookDto } from './dto/update-playbook.dto';
@@ -8,8 +8,20 @@ export class PlaybooksController {
   constructor(private playbooksService: PlaybooksService) {}
 
   @Get()
-  async findAll() {
-    return this.playbooksService.findAll();
+  async findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('order') order?: 'asc' | 'desc',
+  ) {
+    return this.playbooksService.findAll({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      search,
+      sortBy,
+      order,
+    });
   }
 
   @Get(':id')

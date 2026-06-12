@@ -5,6 +5,14 @@ import { Playbook, PlaybookDocument } from './playbook.schema';
 import { CreatePlaybookDto } from './dto/create-playbook.dto';
 import { UpdatePlaybookDto } from './dto/update-playbook.dto';
 
+export interface PlaybookListQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: string;
+  order?: 'asc' | 'desc';
+}
+
 @Injectable()
 export class PlaybooksService {
   constructor(
@@ -12,8 +20,30 @@ export class PlaybooksService {
     private playbookModel: Model<PlaybookDocument>,
   ) {}
 
-  async findAll() {
-    return this.playbookModel.find().sort({ triggerType: 1 });
+  async findAll(query: PlaybookListQuery = {}) {
+    const { page = 1, limit = 20, search, sortBy = 'triggerType', order = 'asc' } = query;
+
+    const filter: Record<string, unknown> = {};
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { triggerType: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const sortDir = order === 'desc' ? -1 : 1;
+
+    const [data, total] = await Promise.all([
+      this.playbookModel
+        .find(filter)
+        .sort({ [sortBy]: sortDir })
+        .skip(skip)
+        .limit(limit),
+      this.playbookModel.countDocuments(filter),
+    ]);
+
+    return { data, total, page, limit, pageCount: Math.ceil(total / limit) };
   }
 
   async findById(id: string) {

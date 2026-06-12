@@ -17,8 +17,24 @@ export class DoctorsController {
   constructor(private doctorsService: DoctorsService) {}
 
   @Get()
-  async findAll(@Query('search') search?: string) {
-    return this.doctorsService.findAll(search);
+  async findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('hospitalId') hospitalId?: string,
+    @Query('specialty') specialty?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('order') order?: 'asc' | 'desc',
+  ) {
+    return this.doctorsService.findAll({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      search,
+      hospitalId,
+      specialty,
+      sortBy,
+      order,
+    });
   }
 
   @Get(':id')

@@ -5,6 +5,16 @@ import { Hospital, HospitalDocument } from './hospital.schema';
 import { CreateHospitalDto } from './dto/create-hospital.dto';
 import { UpdateHospitalDto } from './dto/update-hospital.dto';
 
+export interface HospitalListQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  type?: string;
+  city?: string;
+  sortBy?: string;
+  order?: 'asc' | 'desc';
+}
+
 @Injectable()
 export class HospitalsService {
   constructor(
@@ -12,9 +22,27 @@ export class HospitalsService {
     private hospitalModel: Model<HospitalDocument>,
   ) {}
 
-  async findAll(search?: string) {
-    const filter = search ? { name: { $regex: search, $options: 'i' } } : {};
-    return this.hospitalModel.find(filter).limit(20);
+  async findAll(query: HospitalListQuery = {}) {
+    const { page = 1, limit = 20, search, type, city, sortBy = 'name', order = 'asc' } = query;
+
+    const filter: Record<string, unknown> = {};
+    if (search) filter.name = { $regex: search, $options: 'i' };
+    if (type) filter.type = type;
+    if (city) filter.city = { $regex: city, $options: 'i' };
+
+    const skip = (page - 1) * limit;
+    const sortDir = order === 'desc' ? -1 : 1;
+
+    const [data, total] = await Promise.all([
+      this.hospitalModel
+        .find(filter)
+        .sort({ [sortBy]: sortDir })
+        .skip(skip)
+        .limit(limit),
+      this.hospitalModel.countDocuments(filter),
+    ]);
+
+    return { data, total, page, limit, pageCount: Math.ceil(total / limit) };
   }
 
   async findOne(id: string) {
