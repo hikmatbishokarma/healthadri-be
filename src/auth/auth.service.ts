@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import * as admin from 'firebase-admin';
@@ -13,6 +13,13 @@ const STATIC_OTP = '1234';
 export class AuthService {
   private otps = new Map<string, string>();
 
+  // The static OTP (1234) is a local-dev convenience only. It is enabled solely
+  // when ALLOW_STATIC_OTP=true. In production this is left unset, so the only way
+  // to obtain a token by phone is a server-verified Firebase ID token
+  // (see firebaseVerify). This prevents anyone from bypassing phone verification
+  // by calling /auth/verify-otp with "1234" directly.
+  private readonly staticOtpEnabled = process.env.ALLOW_STATIC_OTP === 'true';
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -20,6 +27,9 @@ export class AuthService {
   ) {}
 
   async sendOtp(phone: string) {
+    if (!this.staticOtpEnabled) {
+      throw new ForbiddenException('OTP login is disabled. Use phone verification.');
+    }
     this.otps.set(phone, STATIC_OTP);
     return { success: true, message: 'OTP sent' };
   }
@@ -31,6 +41,9 @@ export class AuthService {
     skipOtpCheck = false,
   ) {
     if (!skipOtpCheck) {
+      if (!this.staticOtpEnabled) {
+        throw new ForbiddenException('OTP login is disabled. Use phone verification.');
+      }
       const expected = this.otps.get(phone) ?? STATIC_OTP;
       if (otp !== expected) {
         throw new UnauthorizedException('Invalid OTP');
