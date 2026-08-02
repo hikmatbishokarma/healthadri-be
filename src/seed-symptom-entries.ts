@@ -3,6 +3,11 @@ import * as mongoose from 'mongoose';
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/healthadri';
 
+// Optional override so this doesn't always land on "whichever patient is
+// first" — pass a phone to target a specific seeded demo patient, e.g.:
+//   PATIENT_PHONE=1313131313 npx ts-node src/seed-symptom-entries.ts
+const PATIENT_PHONE = process.env.PATIENT_PHONE;
+
 // Realistic 7-day pattern: starts moderate, peaks Thu-Fri (post-chemo), recovers
 const PATTERN: Record<string, number[]> = {
   // index 0 = 7 days ago, index 6 = today (will be skipped — today is from real check-in)
@@ -24,9 +29,15 @@ async function run() {
   await mongoose.connect(MONGO_URI);
   const db = mongoose.connection.db;
 
-  const patient = await db.collection('users').findOne({ role: 'patient' });
+  const patient = await db.collection('users').findOne(
+    PATIENT_PHONE ? { role: 'patient', phone: PATIENT_PHONE } : { role: 'patient' },
+  );
   if (!patient) {
-    console.error('No patient found. Run `npm run seed` first.');
+    console.error(
+      PATIENT_PHONE
+        ? `No patient found with phone ${PATIENT_PHONE}. Run \`npm run seed\` first.`
+        : 'No patient found. Run `npm run seed` first.',
+    );
     process.exit(1);
   }
   console.log(`Seeding 7 days of entries for patient: ${patient.name} (${patient._id})`);

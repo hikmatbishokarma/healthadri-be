@@ -3,6 +3,11 @@ import * as mongoose from 'mongoose';
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/healthadri';
 
+// Optional override so this doesn't always land on "whichever patient is
+// first" — pass a phone to target a specific seeded demo patient, e.g.:
+//   PATIENT_PHONE=1313131313 npx ts-node src/seed-appointments.ts
+const PATIENT_PHONE = process.env.PATIENT_PHONE;
+
 function daysFromNow(n: number, hour = 10, minute = 0): Date {
   const d = new Date();
   d.setDate(d.getDate() + n);
@@ -14,77 +19,58 @@ async function run() {
   await mongoose.connect(MONGO_URI);
   const db = mongoose.connection.db;
 
-  const patient = await db.collection('users').findOne({ role: 'patient' });
+  const patient = await db.collection('users').findOne(
+    PATIENT_PHONE ? { role: 'patient', phone: PATIENT_PHONE } : { role: 'patient' },
+  );
   if (!patient) {
-    console.error('No patient found. Run `npm run seed` first.');
+    console.error(
+      PATIENT_PHONE
+        ? `No patient found with phone ${PATIENT_PHONE}. Run \`npm run seed\` first.`
+        : 'No patient found. Run `npm run seed` first.',
+    );
     process.exit(1);
   }
-  console.log(`Seeding appointments for patient: ${patient.name} (${patient._id})`);
+  console.log(`Seeding tasks (Next Up) for patient: ${patient.name} (${patient._id})`);
 
-  const appts = [
+  // Next Up on the patient dashboard reads GET /tasks?status=active, backed by
+  // the `tasks` collection (type: 'visit' | 'test') — not the legacy
+  // `appointments` collection, which nothing in the mobile app calls anymore.
+  const tasks = [
     {
       patientId: patient._id,
-      type: 'chemo',
-      title: 'Chemotherapy — Session 3',
-      doctor: 'Dr. Anand Rao',
-      location: 'Basavatarakam',
-      scheduledAt: daysFromNow(3, 10, 0),
-      status: 'scheduled',
-      notes: 'Carry Aadhar + Aarogyasri card.',
-      createdByUserId: null,
+      type: 'visit',
+      title: 'Chemotherapy — Session 3, Basavatarakam',
+      date: daysFromNow(3, 10, 0),
+      status: 'active',
+      sourceDocumentId: null,
     },
     {
       patientId: patient._id,
-      type: 'counselling',
-      title: 'Counselling Session',
-      doctor: 'Dr. Meera K. · Onco-Psychologist',
-      location: 'Online Video Call',
-      scheduledAt: daysFromNow(6, 16, 0),
-      status: 'scheduled',
-      notes: '',
-      createdByUserId: null,
-    },
-    {
-      patientId: patient._id,
-      type: 'lab',
-      title: 'Lab Tests — CBC & LFT',
-      doctor: '',
-      location: 'Vijaya Diagnostics · NABL · Himayatnagar',
-      scheduledAt: daysFromNow(10, 8, 0),
-      status: 'scheduled',
-      notes: 'Fasting required.',
-      createdByUserId: null,
-    },
-    {
-      patientId: patient._id,
-      type: 'chemo',
-      title: 'Chemotherapy — Session 2',
-      doctor: 'Dr. Anand Rao',
-      location: 'Basavatarakam',
-      scheduledAt: daysFromNow(-7, 10, 0),
-      status: 'completed',
-      notes: '',
-      createdByUserId: null,
+      type: 'test',
+      title: 'Lab Tests — CBC & LFT (fasting required)',
+      date: daysFromNow(10, 8, 0),
+      status: 'active',
+      sourceDocumentId: null,
     },
   ];
 
-  const col = db.collection('appointments');
-  for (const a of appts) {
+  const col = db.collection('tasks');
+  for (const t of tasks) {
     const existing = await col.findOne({
-      patientId: a.patientId,
-      title: a.title,
-      scheduledAt: a.scheduledAt,
+      patientId: t.patientId,
+      title: t.title,
+      date: t.date,
     });
     if (existing) {
-      console.log(`Skipped (exists): ${a.title}`);
+      console.log(`Skipped (exists): ${t.title}`);
     } else {
-      await col.insertOne({ ...a, createdAt: new Date(), updatedAt: new Date() });
-      console.log(`Inserted: ${a.title}`);
+      await col.insertOne({ ...t, createdAt: new Date(), updatedAt: new Date() });
+      console.log(`Inserted: ${t.title}`);
     }
   }
 
   await mongoose.disconnect();
-  console.log('\nDone — appointments seeded.');
+  console.log('\nDone — tasks seeded.');
 }
 
 run().catch((err) => {

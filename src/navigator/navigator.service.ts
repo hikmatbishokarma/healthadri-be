@@ -109,6 +109,7 @@ export class NavigatorService {
       return {
         _id: pid,
         name: patient.name,
+        patientCode: patient.patientCode || '',
         cancerType: patient.cancerType || '',
         stage: patient.cancerStage || '',
         priority: (alert?.severity ?? 'LOW') as 'HIGH' | 'MED' | 'LOW',
