@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -69,5 +70,6 @@ import { MedicinesModule } from './medicines/medicines.module';
     PushNotificationsModule,
     MedicinesModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}
